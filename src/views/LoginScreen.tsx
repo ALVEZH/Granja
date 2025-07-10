@@ -44,7 +44,7 @@ export default function LoginScreen() {
       return;
     }
 
-    if (email === 'adminalze@gmail.com' && password === '123456') {
+    if (email === 'encargadoalze@gmail.com' && password === 'Encargadoalze09') {
       navigation.replace('Captura');
     } else {
       Alert.alert('Error', 'Correo o contraseña incorrectos, inténtale de nuevo.');
@@ -66,7 +66,7 @@ export default function LoginScreen() {
               <Text style={styles.label}>Correo electrónico</Text>
               <TextInput
                 style={styles.input}
-                placeholder="tu.correo@ejemplo.com"
+                placeholder="correoelectronico@gmail.com"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
