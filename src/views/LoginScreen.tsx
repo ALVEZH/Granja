@@ -45,7 +45,7 @@ export default function LoginScreen() {
     }
 
     if (email === 'encargadoalze@gmail.com' && password === 'Encargadoalze09') {
-      navigation.replace('Captura');
+      navigation.replace('Menu');
     } else {
       Alert.alert('Error', 'Correo o contraseña incorrectos, inténtale de nuevo.');
     }
@@ -86,11 +86,7 @@ export default function LoginScreen() {
                   onChangeText={setPassword}
                 />
                 <TouchableOpacity onPress={toggleSecureText} style={styles.iconRight}>
-                  <Ionicons
-                    name={secureText ? 'eye-off' : 'eye'}
-                    size={20}
-                    color="#555"
-                  />
+                  <Ionicons name={secureText ? 'eye-off' : 'eye'} size={20} color="#555" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -110,18 +106,9 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#e0e8ff',
-  },
-  keyboard: {
-    flex: 1,
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
+  container: { flex: 1, backgroundColor: '#eaf1f9' },
+  keyboard: { flex: 1 },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   card: {
     backgroundColor: '#fff',
     borderRadius: 24,
@@ -147,14 +134,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
   },
-  inputGroup: {
-    marginBottom: 18,
-  },
-  label: {
-    fontSize: 14,
-    color: '#4a5568',
-    marginBottom: 6,
-  },
+  inputGroup: { marginBottom: 18 },
+  label: { fontSize: 14, color: '#4a5568', marginBottom: 6 },
   input: {
     backgroundColor: '#f9fafb',
     borderWidth: 1,
@@ -175,7 +156,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingRight: 40, // espacio para el ícono
+    paddingRight: 40,
     fontSize: 16,
   },
   iconRight: {
@@ -184,7 +165,7 @@ const styles = StyleSheet.create({
     top: '30%',
   },
   button: {
-    backgroundColor: '#5a67d8',
+    backgroundColor: '#749BC2',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
@@ -198,11 +179,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 40,
   },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 18,
-  },
+  buttonText: { color: '#fff', fontWeight: '700', fontSize: 18 },
   link: {
     color: '#4c51bf',
     textAlign: 'center',

@@ -3,7 +3,13 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import LoginScreen from '../views/LoginScreen';
-import CapturaScreen from '../views/CapturaScreen';
+import MenuScreen from '../views/MenuScreen';
+import ProduccionScreen from '../views/ProduccionScreen';
+import AlimentoScreen from '../views/AlimentoScreen';
+import ExistenciaScreen from '../views/ExistenciaScreen';
+import EnvaseScreen from '../views/EnvaseScreen';
+import ResumenSeccion from '../views/ResumenSeccion';
+
 import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -13,7 +19,12 @@ export default function AppNavigator() {
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Captura" component={CapturaScreen} />
+        <Stack.Screen name="Menu" component={MenuScreen} />
+        <Stack.Screen name="Produccion" component={ProduccionScreen} />
+        <Stack.Screen name="Alimento" component={AlimentoScreen} />
+        <Stack.Screen name="Existencia" component={ExistenciaScreen} />
+        <Stack.Screen name="Envase" component={EnvaseScreen} />
+        <Stack.Screen name="ResumenSeccion" component={ResumenSeccion} />
       </Stack.Navigator>
     </NavigationContainer>
   );

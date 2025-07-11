@@ -1,5 +1,9 @@
-// src/navigation/types.ts
 export type RootStackParamList = {
   Login: undefined;
-  Captura: undefined;
+  Menu: undefined;
+  Produccion: undefined;
+  Alimento: undefined;
+  Existencia: undefined;
+  Envase: undefined;
+  ResumenSeccion: undefined;  // Aquí también la agregas
 };
