@@ -1,573 +1,181 @@
 "use client"
 
-import type React from "react"
-import { useState, useCallback, useMemo, useEffect } from "react"
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Modal,
-  Alert,
-} from "react-native"
-import DateTimePicker from "@react-native-community/datetimepicker"
-import Icon from "react-native-vector-icons/MaterialIcons"
-import { dbManager } from "../database/offline/db"
-import { DatabaseQueries } from "../database/offline/queries"
-import type { ProduccionData } from "../database/offline/types"
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
+import { DatabaseQueries } from '../database/offline/queries';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
 
-// Constantes
-const tiposHuevo = ["BLANCO", "ROTO 1", "ROTO 2", "MANCHADO", "FRAGIL 1", "FRAGIL 2", "YEMA", "B1", "EXTRA 240P25"]
-const secciones = Array.from({ length: 10 }, (_, i) => `SECCIÓN ${i + 1}`)
-const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`)
-
-// Tipos locales para el formulario
-type RegistroProduccion = {
-  [tipo: string]: {
-    cajas: string
-    restos: string
-  }
-}
-
-type FormData = {
-  [tipo: string]: {
-    cajas: string
-    restos: string
-  }
-}
-
-// Input personalizado
-const CustomInput = ({
-  label,
-  value,
-  onChangeText,
-}: {
-  label: string
-  value: string
-  onChangeText: (text: string) => void
-}) => (
-  <View style={styles.inputContainer}>
-    <TextInput
-      style={styles.input}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={label}
-      keyboardType="numeric"
-      placeholderTextColor="#94a3b8"
-    />
-    {value ? <Text style={styles.floatingLabel}>{label}</Text> : null}
-  </View>
-)
-
-// Tarjeta reutilizable
-const Card = ({ children }: { children: React.ReactNode }) => <View style={styles.card}>{children}</View>
-
-// Botón reutilizable
-const Button = ({
-  title,
-  onPress,
-  icon,
-  disabled = false,
-}: {
-  title: string
-  onPress: () => void
-  icon?: string
-  disabled?: boolean
-}) => (
-  <TouchableOpacity style={[styles.button, disabled && styles.buttonDisabled]} onPress={onPress} disabled={disabled}>
-    {icon && <Icon name={icon} size={20} color="#fff" style={{ marginRight: 8 }} />}
-    <Text style={styles.buttonText}>{title}</Text>
-  </TouchableOpacity>
-)
+const tiposHuevo = [
+  'BLANCO', 'ROTO 1', 'ROTO 2', 'MANCHADO', 'FRAGIL 1', 'FRAGIL 2', 'YEMA', 'B1', 'EXTRA 240PZS'
+];
+const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
 
 export default function ProduccionScreen() {
-  // Estados del formulario
-  const [formData, setFormData] = useState<FormData>(() => {
-    return tiposHuevo.reduce((acc, tipo) => {
-      acc[tipo] = { cajas: "", restos: "" }
-      return acc
-    }, {} as FormData)
-  })
+  const route = useRoute();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const seccionSeleccionada = (route as any).params?.seccionSeleccionada;
+  // Elimina el estado de fecha y usa siempre la fecha actual en el render
+  // const [fecha, setFecha] = useState(() => {
+  //   const today = new Date();
+  //   return today.toISOString().split('T')[0];
+  // });
+  const fechaHoy = new Date().toISOString().split('T')[0];
 
-  const [fecha, setFecha] = useState(new Date())
-  const [showDatePicker, setShowDatePicker] = useState(false)
-  const [selectedSeccion, setSelectedSeccion] = useState(secciones[0])
-  const [selectedCaseta, setSelectedCaseta] = useState<string | null>(null)
-  const [showModalSeccion, setShowModalSeccion] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [isDbReady, setIsDbReady] = useState(false)
+  // Estructura: { [caseta]: { [tipo]: { cajas: string, restos: string } } }
+  const [tabla, setTabla] = useState(() => {
+    const obj: any = {};
+    casetas.forEach(caseta => {
+      obj[caseta] = {};
+      tiposHuevo.forEach(tipo => {
+        obj[caseta][tipo] = { cajas: '', restos: '' };
+      });
+    });
+    return obj;
+  });
 
-  // Inicializar base de datos
-  useEffect(() => {
-    const initDB = async () => {
-      try {
-        await dbManager.init()
-        setIsDbReady(true)
-      } catch (error) {
-        console.error("Error al inicializar DB:", error)
-        Alert.alert("Error", "No se pudo inicializar la base de datos")
-      }
-    }
-    initDB()
-  }, [])
+  // Calcular totales por tipo
+  const totales = useMemo(() => {
+    const t: any = {};
+    tiposHuevo.forEach(tipo => {
+      let cajas = 0, restos = 0;
+      casetas.forEach(caseta => {
+        cajas += Number(tabla[caseta][tipo].cajas) || 0;
+        restos += Number(tabla[caseta][tipo].restos) || 0;
+      });
+      t[tipo] = { cajas, restos };
+    });
+    return t;
+  }, [tabla]);
 
-  // Cargar datos existentes cuando se selecciona una caseta
-  useEffect(() => {
-    if (selectedCaseta && isDbReady) {
-      loadExistingData()
-    }
-  }, [selectedCaseta, fecha, isDbReady])
-
-  const formattedDate = useMemo(
-    () => fecha.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }),
-    [fecha],
-  )
-
-  const formattedDateForDB = useMemo(() => fecha.toISOString().split("T")[0], [fecha])
-
-  const loadExistingData = async () => {
-    if (!selectedCaseta) return
-
-    try {
-      const existingData = await DatabaseQueries.getProduccionByFecha(formattedDateForDB)
-      const casetaData = existingData.find((d) => d.caseta === selectedCaseta)
-
-      if (casetaData) {
-        // Mapear datos de la DB al formulario
-        const mappedData: FormData = {
-          BLANCO: { cajas: casetaData.blanco_cajas.toString(), restos: casetaData.blanco_restos.toString() },
-          "ROTO 1": { cajas: casetaData.roto1_cajas.toString(), restos: casetaData.roto1_restos.toString() },
-          "ROTO 2": { cajas: casetaData.roto2_cajas.toString(), restos: casetaData.roto2_restos.toString() },
-          MANCHADO: { cajas: casetaData.manchado_cajas.toString(), restos: casetaData.manchado_restos.toString() },
-          "FRAGIL 1": { cajas: casetaData.fragil1_cajas.toString(), restos: casetaData.fragil1_restos.toString() },
-          "FRAGIL 2": { cajas: casetaData.fragil2_cajas.toString(), restos: casetaData.fragil2_restos.toString() },
-          YEMA: { cajas: casetaData.yema_cajas.toString(), restos: casetaData.yema_restos.toString() },
-          B1: { cajas: casetaData.b1_cajas.toString(), restos: casetaData.b1_restos.toString() },
-          "EXTRA 240P25": {
-            cajas: casetaData.extra240_cajas.toString(),
-            restos: casetaData.extra240_restos.toString(),
-          },
-        }
-        setFormData(mappedData)
-      } else {
-        // Limpiar formulario si no hay datos
-        resetForm()
-      }
-    } catch (error) {
-      console.error("Error al cargar datos existentes:", error)
-    }
-  }
-
-  const resetForm = () => {
-    setFormData(
-      tiposHuevo.reduce((acc, tipo) => {
-        acc[tipo] = { cajas: "", restos: "" }
-        return acc
-      }, {} as FormData),
-    )
-  }
-
-  const handleDateChange = useCallback((_: any, date?: Date) => {
-    setShowDatePicker(false)
-    if (date) setFecha(date)
-  }, [])
-
-  const handleChange = useCallback((tipo: string, campo: "cajas" | "restos", value: string) => {
-    setFormData((prev) => ({
+  // Manejar cambios en la tabla
+  const handleChange = (caseta: string, tipo: string, campo: 'cajas' | 'restos', valor: string) => {
+    setTabla(prev => ({
       ...prev,
-      [tipo]: {
-        ...prev[tipo],
-        [campo]: value,
-      },
-    }))
-  }, [])
-
-  const handleSave = async () => {
-    if (!selectedCaseta || !isDbReady) {
-      Alert.alert("Error", "Selecciona una caseta primero")
-      return
-    }
-
-    setLoading(true)
-    try {
-      // Convertir datos del formulario al formato de la DB
-      const produccionData: ProduccionData = {
-        caseta: selectedCaseta,
-        fecha: formattedDateForDB,
-        blanco_cajas: Number.parseInt(formData["BLANCO"].cajas) || 0,
-        blanco_restos: Number.parseInt(formData["BLANCO"].restos) || 0,
-        roto1_cajas: Number.parseInt(formData["ROTO 1"].cajas) || 0,
-        roto1_restos: Number.parseInt(formData["ROTO 1"].restos) || 0,
-        roto2_cajas: Number.parseInt(formData["ROTO 2"].cajas) || 0,
-        roto2_restos: Number.parseInt(formData["ROTO 2"].restos) || 0,
-        manchado_cajas: Number.parseInt(formData["MANCHADO"].cajas) || 0,
-        manchado_restos: Number.parseInt(formData["MANCHADO"].restos) || 0,
-        fragil1_cajas: Number.parseInt(formData["FRAGIL 1"].cajas) || 0,
-        fragil1_restos: Number.parseInt(formData["FRAGIL 1"].restos) || 0,
-        fragil2_cajas: Number.parseInt(formData["FRAGIL 2"].cajas) || 0,
-        fragil2_restos: Number.parseInt(formData["FRAGIL 2"].restos) || 0,
-        yema_cajas: Number.parseInt(formData["YEMA"].cajas) || 0,
-        yema_restos: Number.parseInt(formData["YEMA"].restos) || 0,
-        b1_cajas: Number.parseInt(formData["B1"].cajas) || 0,
-        b1_restos: Number.parseInt(formData["B1"].restos) || 0,
-        extra240_cajas: Number.parseInt(formData["EXTRA 240P25"].cajas) || 0,
-        extra240_restos: Number.parseInt(formData["EXTRA 240P25"].restos) || 0,
+      [caseta]: {
+        ...prev[caseta],
+        [tipo]: {
+          ...prev[caseta][tipo],
+          [campo]: valor.replace(/[^0-9]/g, '')
+        }
       }
+    }));
+  };
 
-      await DatabaseQueries.insertProduccion(produccionData)
-
-      Alert.alert("Éxito", `Datos de producción guardados para ${selectedCaseta} - ${formattedDate}`, [
-        {
-          text: "OK",
-          onPress: () => {
-            setSelectedCaseta(null)
-            resetForm()
-          },
-        },
-      ])
+  // Guardar datos en la base de datos
+  const handleGuardar = async () => {
+    try {
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      for (const caseta of casetas) {
+        const data: any = {
+          caseta,
+          fecha: fechaHoy,
+          blanco_cajas: Number(tabla[caseta]['BLANCO'].cajas) || 0,
+          blanco_restos: Number(tabla[caseta]['BLANCO'].restos) || 0,
+          roto1_cajas: Number(tabla[caseta]['ROTO 1'].cajas) || 0,
+          roto1_restos: Number(tabla[caseta]['ROTO 1'].restos) || 0,
+          roto2_cajas: Number(tabla[caseta]['ROTO 2'].cajas) || 0,
+          roto2_restos: Number(tabla[caseta]['ROTO 2'].restos) || 0,
+          manchado_cajas: Number(tabla[caseta]['MANCHADO'].cajas) || 0,
+          manchado_restos: Number(tabla[caseta]['MANCHADO'].restos) || 0,
+          fragil1_cajas: Number(tabla[caseta]['FRAGIL 1'].cajas) || 0,
+          fragil1_restos: Number(tabla[caseta]['FRAGIL 1'].restos) || 0,
+          fragil2_cajas: Number(tabla[caseta]['FRAGIL 2'].cajas) || 0,
+          fragil2_restos: Number(tabla[caseta]['FRAGIL 2'].restos) || 0,
+          yema_cajas: Number(tabla[caseta]['YEMA'].cajas) || 0,
+          yema_restos: Number(tabla[caseta]['YEMA'].restos) || 0,
+          b1_cajas: Number(tabla[caseta]['B1'].cajas) || 0,
+          b1_restos: Number(tabla[caseta]['B1'].restos) || 0,
+          extra240_cajas: Number(tabla[caseta]['EXTRA 240PZS'].cajas) || 0,
+          extra240_restos: Number(tabla[caseta]['EXTRA 240PZS'].restos) || 0,
+        };
+        await DatabaseQueries.insertProduccion(data);
+      }
+      Alert.alert('Éxito', 'Datos de producción guardados correctamente.');
+      navigation.replace('Alimento', { seccionSeleccionada });
     } catch (error) {
-      console.error("Error al guardar:", error)
-      Alert.alert("Error", "No se pudieron guardar los datos")
-    } finally {
-      setLoading(false)
+      Alert.alert('Error', 'No se pudieron guardar los datos.');
     }
-  }
-
-  const handleCancel = () => {
-    Alert.alert("Cancelar", "¿Estás seguro de que quieres cancelar? Se perderán los cambios no guardados.", [
-      { text: "No", style: "cancel" },
-      {
-        text: "Sí",
-        onPress: () => {
-          setSelectedCaseta(null)
-          resetForm()
-        },
-      },
-    ])
-  }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Encabezado */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setShowModalSeccion(true)} style={styles.seccionSelector}>
-          <Text style={styles.seccionText}>{selectedSeccion}</Text>
-          <Icon name="arrow-drop-down" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateSelector}>
-          <Text style={styles.dateText}>{formattedDate}</Text>
-          <Icon name="event" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Contenido */}
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.content}>
-        {!selectedCaseta ? (
-          <ScrollView contentContainerStyle={styles.casetaList}>
-            <Text style={styles.instructionText}>
-              Selecciona una caseta para registrar la producción del {formattedDate}
-            </Text>
-            {casetas.map((caseta) => (
-              <TouchableOpacity
-                key={caseta}
-                style={styles.casetaCard}
-                onPress={() => setSelectedCaseta(caseta)}
-                disabled={!isDbReady}
-              >
-                <Icon name="home" size={24} color="#517aa2" />
-                <Text style={styles.casetaText}>{caseta}</Text>
-                <Icon name="chevron-right" size={20} color="#517aa2" />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        ) : (
-          <ScrollView style={styles.formContainer}>
-            <Text style={styles.formTitle}>
-              REGISTRO - {selectedSeccion} / {selectedCaseta}
-            </Text>
-            <Text style={styles.formSubtitle}>Fecha: {formattedDate}</Text>
-
-            {tiposHuevo.map((tipo) => (
-              <Card key={tipo}>
-                <Text style={styles.cardTitle}>{tipo}</Text>
-                <View style={styles.inputRow}>
-                  <View style={styles.inputHalf}>
-                    <CustomInput
-                      label="Cajas"
-                      value={formData[tipo].cajas}
-                      onChangeText={(text) => handleChange(tipo, "cajas", text)}
-                    />
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView horizontal style={{ backgroundColor: '#fff' }}>
+        <View>
+          <Text style={styles.title}>Producción - {seccionSeleccionada} - {fechaHoy}</Text>
+          <ScrollView style={{ maxHeight: 520 }}>
+            <View style={styles.table}>
+              <View style={styles.headerRow}>
+                <Text style={styles.headerCell}>CASETA</Text>
+                {tiposHuevo.map(tipo => (
+                  <View key={tipo} style={styles.headerTipo}>
+                    <Text style={styles.headerCellTipo}>{tipo}</Text>
+                    <View style={styles.headerSubRow}>
+                      <Text style={styles.headerSubCell}>Cajas</Text>
+                      <Text style={styles.headerSubCell}>Restos</Text>
+                    </View>
                   </View>
-                  <View style={styles.inputHalf}>
-                    <CustomInput
-                      label="Restos"
-                      value={formData[tipo].restos}
-                      onChangeText={(text) => handleChange(tipo, "restos", text)}
-                    />
-                  </View>
+                ))}
+              </View>
+              {casetas.map(caseta => (
+                <View key={caseta} style={styles.dataRow}>
+                  <Text style={styles.casetaCell}>{caseta}</Text>
+                  {tiposHuevo.map(tipo => (
+                    <View key={tipo} style={styles.dataTipo}>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={tabla[caseta][tipo].cajas}
+                        onChangeText={v => handleChange(caseta, tipo, 'cajas', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                      <TextInput
+                        style={styles.inputCell}
+                        value={tabla[caseta][tipo].restos}
+                        onChangeText={v => handleChange(caseta, tipo, 'restos', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                  ))}
                 </View>
-              </Card>
-            ))}
-
-            <View style={styles.buttonRow}>
-              <Button
-                title={loading ? "GUARDANDO..." : "GUARDAR"}
-                onPress={handleSave}
-                icon="save"
-                disabled={loading || !isDbReady}
-              />
-              <Button title="CANCELAR" onPress={handleCancel} icon="close" disabled={loading} />
+              ))}
+              {/* Fila de totales */}
+              <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
+                <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
+                {tiposHuevo.map(tipo => (
+                  <View key={tipo} style={styles.dataTipo}>
+                    <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales[tipo].cajas}</Text>
+                    <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales[tipo].restos}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
           </ScrollView>
-        )}
-      </KeyboardAvoidingView>
-
-      {/* Modal de Sección */}
-      <Modal visible={showModalSeccion} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Selecciona una sección</Text>
-            <ScrollView>
-              {secciones.map((seccion) => (
-                <TouchableOpacity
-                  key={seccion}
-                  onPress={() => {
-                    setSelectedSeccion(seccion)
-                    setShowModalSeccion(false)
-                  }}
-                  style={[styles.modalItem, selectedSeccion === seccion && styles.modalItemSelected]}
-                >
-                  <Text style={[styles.modalItemText, selectedSeccion === seccion && styles.modalItemTextSelected]}>
-                    {seccion}
-                  </Text>
-                  {selectedSeccion === seccion && <Icon name="check" size={20} color="#749BC2" />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowModalSeccion(false)}>
-              <Text style={styles.modalCloseText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
+            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
-
-      {showDatePicker && <DateTimePicker value={fecha} mode="date" display="default" onChange={handleDateChange} />}
+      </ScrollView>
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#eaf1f9",
-  },
-  header: {
-    backgroundColor: "#749BC2",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 16,
-    alignItems: "center",
-  },
-  seccionSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  seccionText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginRight: 6,
-  },
-  dateSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#5f85a2",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-  },
-  dateText: {
-    color: "#fff",
-    fontSize: 14,
-    marginRight: 6,
-  },
-  content: {
-    flex: 1,
-  },
-  casetaList: {
-    padding: 16,
-  },
-  instructionText: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#517aa2",
-    marginBottom: 20,
-    fontWeight: "500",
-  },
-  casetaCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  casetaText: {
-    fontSize: 16,
-    color: "#517aa2",
-    fontWeight: "600",
-    flex: 1,
-    marginLeft: 12,
-  },
-  formContainer: {
-    padding: 16,
-  },
-  formTitle: {
-    fontSize: 18,
-    textAlign: "center",
-    fontWeight: "bold",
-    color: "#517aa2",
-    marginBottom: 8,
-  },
-  formSubtitle: {
-    fontSize: 14,
-    textAlign: "center",
-    color: "#64748b",
-    marginBottom: 20,
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 12,
-    color: "#749BC2",
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  inputHalf: {
-    flex: 1,
-  },
-  inputContainer: {
-    position: "relative",
-    marginBottom: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: "#fff",
-    fontSize: 16,
-  },
-  floatingLabel: {
-    position: "absolute",
-    top: -10,
-    left: 12,
-    fontSize: 12,
-    backgroundColor: "#fff",
-    paddingHorizontal: 4,
-    color: "#64748b",
-  },
-  buttonRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  button: {
-    backgroundColor: "#749BC2",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  buttonDisabled: {
-    backgroundColor: "#94a3b8",
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "60%",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 16,
-    textAlign: "center",
-    color: "#517aa2",
-  },
-  modalItem: {
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderBottomColor: "#e2e8f0",
-    borderBottomWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalItemSelected: {
-    backgroundColor: "#f1f5f9",
-  },
-  modalItemText: {
-    fontSize: 16,
-    color: "#334155",
-  },
-  modalItemTextSelected: {
-    color: "#749BC2",
-    fontWeight: "600",
-  },
-  modalCloseButton: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: "#749BC2",
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  modalCloseText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-})
+  safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
+  title: { fontSize: 18, fontWeight: 'bold', margin: 12, textAlign: 'center', color: '#333' },
+  table: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 8, margin: 8, backgroundColor: '#fff' },
+  headerRow: { flexDirection: 'row', backgroundColor: '#dbeafe', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+  headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 70, textAlign: 'center', color: '#222' },
+  headerTipo: { flexDirection: 'column', alignItems: 'center', minWidth: 70 },
+  headerCellTipo: { fontWeight: 'bold', fontSize: 12, color: '#222', textAlign: 'center' },
+  headerSubRow: { flexDirection: 'row' },
+  headerSubCell: { fontSize: 11, fontWeight: 'bold', width: 35, textAlign: 'center', color: '#444' },
+  dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
+  casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 70, textAlign: 'center', color: '#333' },
+  dataTipo: { flexDirection: 'row', alignItems: 'center', minWidth: 70 },
+  inputCell: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, width: 35, height: 32, margin: 2, textAlign: 'center', backgroundColor: '#f8fafc', fontSize: 13, color: '#222' },
+  btnGuardar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
+  btnGuardarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+});

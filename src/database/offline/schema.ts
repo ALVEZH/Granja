@@ -50,6 +50,7 @@ export const createTables = `
     entrada INTEGER DEFAULT 0,
     mortalidad INTEGER DEFAULT 0,
     salida INTEGER DEFAULT 0,
+    edad INTEGER DEFAULT 0,
     final INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(caseta, fecha)

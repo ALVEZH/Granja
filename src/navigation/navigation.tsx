@@ -9,6 +9,7 @@ import AlimentoScreen from '../views/AlimentoScreen';
 import ExistenciaScreen from '../views/ExistenciaScreen';
 import EnvaseScreen from '../views/EnvaseScreen';
 import ResumenSeccion from '../views/ResumenSeccion';
+import SeleccionSeccion from '../views/SeleccionSeccion';
 
 import { RootStackParamList } from './types';
 
@@ -19,6 +20,7 @@ export default function AppNavigator() {
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="SeleccionSeccion" component={SeleccionSeccion} />
         <Stack.Screen name="Menu" component={MenuScreen} />
         <Stack.Screen name="Produccion" component={ProduccionScreen} />
         <Stack.Screen name="Alimento" component={AlimentoScreen} />

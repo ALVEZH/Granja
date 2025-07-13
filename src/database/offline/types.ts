@@ -44,6 +44,7 @@ export interface ExistenciaData {
   entrada: number
   mortalidad: number
   salida: number
+  edad: number
   final: number
   created_at?: string
 }

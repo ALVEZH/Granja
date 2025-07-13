@@ -1,693 +1,353 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-} from 'react-native';
-// @ts-ignore - Ignore type checking for react-native-vector-icons
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { DatabaseQueries } from '../database/offline/queries';
+import * as Print from 'expo-print';
 
-// Type definitions
-type CasetaKey = 'CASETA 1' | 'CASETA 2' | 'CASETA 3' | 'CASETA 4' | 'CASETA 5' | 'CASETA 6' | 'CASETA 7' | 'CASETA 8' | 'CASETA 9';
-type ColumnaProduccion = 'BLANCO' | 'ROTO 1' | 'ROTO 2' | 'MANCHADO' | 'FRAGIL 1' | 'FRAGIL 2' | 'YEMA' | 'B1' | 'EXTRA 240PZS';
+const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
+const columnasProduccion = [
+  'BLANCO', 'ROTO 1', 'ROTO 2', 'MANCHADO', 'FRAGIL 1', 'FRAGIL 2', 'YEMA', 'B1', 'EXTRA 240PZS'
+];
+const envases = [
+  'CAJA TIPO A', 'SEPARADOR TIPO A', 'CAJA TIPO B', 'SEPARADOR TIPO B',
+  'CONO', 'CONO 240 PZS', 'CONO ESTRELLA', 'CINTA', 'CINTA BLANCA'
+];
 
-interface ProduccionData {
-  cajas: number;
-  restos: number;
-}
+export default function ResumenSeccion() {
+  const route = useRoute();
+  const navigation = useNavigation();
+  const seccionSeleccionada = (route as any).params?.seccionSeleccionada;
+  const [fecha, setFecha] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [produccion, setProduccion] = useState<any[]>([]);
+  const [alimento, setAlimento] = useState<any[]>([]);
+  const [existencia, setExistencia] = useState<any[]>([]);
+  const [envase, setEnvase] = useState<any[]>([]);
+  // Estados para nombres y firmas
+  const [nombreEncargado, setNombreEncargado] = useState('');
+  const [firmaEncargado, setFirmaEncargado] = useState('');
+  const [nombreSupervisor, setNombreSupervisor] = useState('');
+  const [firmaSupervisor, setFirmaSupervisor] = useState('');
+  const [nombreChofer, setNombreChofer] = useState('');
+  const [firmaChofer, setFirmaChofer] = useState('');
 
-interface AlimentoData {
-  existenciaInicial: number;
-  entrada: number;
-  consumo: number;
-  tipo: string;
-  edad: string;
-}
+  useEffect(() => {
+    DatabaseQueries.getProduccionByFecha(fecha).then(setProduccion);
+    DatabaseQueries.getAlimentoByFecha(fecha).then(setAlimento);
+    DatabaseQueries.getExistenciaByFecha(fecha).then(setExistencia);
+    DatabaseQueries.getEnvaseByFecha(fecha).then(setEnvase);
+  }, [fecha]);
 
-interface ExistenciaData {
-  inicial: number;
-  entrada: number;
-  mortalidad: number;
-  salida: number;
-  final: number;
-}
-
-interface EnvaseData {
-  tipo: string;
-  inicial: number;
-  recibido: number;
-  consumo: number;
-  final: number;
-}
-
-const secciones: CasetaKey[] = ['CASETA 1', 'CASETA 2', 'CASETA 3', 'CASETA 4', 'CASETA 5', 'CASETA 6', 'CASETA 7', 'CASETA 8', 'CASETA 9'];
-const columnasProduccion: ColumnaProduccion[] = ['BLANCO', 'ROTO 1', 'ROTO 2', 'MANCHADO', 'FRAGIL 1', 'FRAGIL 2', 'YEMA', 'B1', 'EXTRA 240PZS'];
-
-// Simulación de datos más realista basada en la imagen
-const produccionSimulada: Record<CasetaKey, Record<ColumnaProduccion, ProduccionData>> = {
-  'CASETA 1': {
-    'BLANCO': { cajas: 71, restos: 8 },
-    'ROTO 1': { cajas: 1, restos: 15 },
-    'ROTO 2': { cajas: 1, restos: 14 },
-    'MANCHADO': { cajas: 1, restos: 18 },
-    'FRAGIL 1': { cajas: 2, restos: 7 },
-    'FRAGIL 2': { cajas: 0, restos: 20 },
-    'YEMA': { cajas: 0, restos: 5 },
-    'B1': { cajas: 14, restos: 5 },
-    'EXTRA 240PZS': { cajas: 29, restos: 12 }
-  },
-  'CASETA 2': {
-    'BLANCO': { cajas: 22, restos: 8 },
-    'ROTO 1': { cajas: 0, restos: 14 },
-    'ROTO 2': { cajas: 1, restos: 13 },
-    'MANCHADO': { cajas: 1, restos: 18 },
-    'FRAGIL 1': { cajas: 1, restos: 12 },
-    'FRAGIL 2': { cajas: 0, restos: 0 },
-    'YEMA': { cajas: 0, restos: 29 },
-    'B1': { cajas: 0, restos: 2 },
-    'EXTRA 240PZS': { cajas: 26, restos: 32 }
-  },
-  'CASETA 3': {
-    'BLANCO': { cajas: 25, restos: 0 },
-    'ROTO 1': { cajas: 0, restos: 12 },
-    'ROTO 2': { cajas: 1, restos: 20 },
-    'MANCHADO': { cajas: 1, restos: 20 },
-    'FRAGIL 1': { cajas: 3, restos: 14 },
-    'FRAGIL 2': { cajas: 0, restos: 0 },
-    'YEMA': { cajas: 0, restos: 35 },
-    'B1': { cajas: 30, restos: 3 },
-    'EXTRA 240PZS': { cajas: 120, restos: 32 }
-  },
-  'CASETA 4': {
-    'BLANCO': { cajas: 224, restos: 4 },
-    'ROTO 1': { cajas: 0, restos: 5 },
-    'ROTO 2': { cajas: 1, restos: 24 },
-    'MANCHADO': { cajas: 1, restos: 30 },
-    'FRAGIL 1': { cajas: 0, restos: 52 },
-    'FRAGIL 2': { cajas: 0, restos: 0 },
-    'YEMA': { cajas: 0, restos: 1 },
-    'B1': { cajas: 21, restos: 0 },
-    'EXTRA 240PZS': { cajas: 40, restos: 21 }
-  },
-  'CASETA 5': {
-    'BLANCO': { cajas: 188, restos: 5 },
-    'ROTO 1': { cajas: 1, restos: 10 },
-    'ROTO 2': { cajas: 1, restos: 20 },
-    'MANCHADO': { cajas: 0, restos: 20 },
-    'FRAGIL 1': { cajas: 0, restos: 15 },
-    'FRAGIL 2': { cajas: 0, restos: 0 },
-    'YEMA': { cajas: 0, restos: 25 },
-    'B1': { cajas: 1, restos: 2 },
-    'EXTRA 240PZS': { cajas: 30, restos: 5 }
-  },
-  'CASETA 6': {
-    'BLANCO': { cajas: 24, restos: 10 },
-    'ROTO 1': { cajas: 1, restos: 12 },
-    'ROTO 2': { cajas: 2, restos: 8 },
-    'MANCHADO': { cajas: 2, restos: 8 },
-    'FRAGIL 1': { cajas: 2, restos: 24 },
-    'FRAGIL 2': { cajas: 0, restos: 0 },
-    'YEMA': { cajas: 0, restos: 6 },
-    'B1': { cajas: 4, restos: 0 },
-    'EXTRA 240PZS': { cajas: 31, restos: 35 }
-  },
-  'CASETA 7': {
-    'BLANCO': { cajas: 72, restos: 6 },
-    'ROTO 1': { cajas: 1, restos: 27 },
-    'ROTO 2': { cajas: 1, restos: 27 },
-    'MANCHADO': { cajas: 2, restos: 24 },
-    'FRAGIL 1': { cajas: 2, restos: 24 },
-    'FRAGIL 2': { cajas: 0, restos: 0 },
-    'YEMA': { cajas: 0, restos: 7 },
-    'B1': { cajas: 3, restos: 0 },
-    'EXTRA 240PZS': { cajas: 30, restos: 10 }
-  },
-  'CASETA 8': {
-    'BLANCO': { cajas: 22, restos: 30 },
-    'ROTO 1': { cajas: 0, restos: 11 },
-    'ROTO 2': { cajas: 2, restos: 5 },
-    'MANCHADO': { cajas: 1, restos: 30 },
-    'FRAGIL 1': { cajas: 1, restos: 34 },
-    'FRAGIL 2': { cajas: 0, restos: 0 },
-    'YEMA': { cajas: 0, restos: 12 },
-    'B1': { cajas: 0, restos: 1 },
-    'EXTRA 240PZS': { cajas: 32, restos: 6 }
-  },
-  'CASETA 9': {
-    'BLANCO': { cajas: 24, restos: 3 },
-    'ROTO 1': { cajas: 0, restos: 8 },
-    'ROTO 2': { cajas: 1, restos: 26 },
-    'MANCHADO': { cajas: 1, restos: 26 },
-    'FRAGIL 1': { cajas: 3, restos: 27 },
-    'FRAGIL 2': { cajas: 0, restos: 0 },
-    'YEMA': { cajas: 0, restos: 4 },
-    'B1': { cajas: 8, restos: 20 },
-    'EXTRA 240PZS': { cajas: 28, restos: 5 }
-  }
-};
-
-const alimentoData: Record<CasetaKey, AlimentoData> = {
-  'CASETA 1': { existenciaInicial: 2870, entrada: 1240, consumo: 0, tipo: 'PL', edad: '45.1' },
-  'CASETA 2': { existenciaInicial: 0, entrada: 1510, consumo: 0, tipo: '', edad: '45.2' },
-  'CASETA 3': { existenciaInicial: 0, entrada: 1672, consumo: 0, tipo: '', edad: '45.2' },
-  'CASETA 4': { existenciaInicial: 0, entrada: 1109, consumo: 0, tipo: '', edad: '45.2' },
-  'CASETA 5': { existenciaInicial: 0, entrada: 1819, consumo: 0, tipo: '', edad: '45.2' },
-  'CASETA 6': { existenciaInicial: 0, entrada: 1810, consumo: 0, tipo: '', edad: '45.5' },
-  'CASETA 7': { existenciaInicial: 0, entrada: 1800, consumo: 0, tipo: '', edad: '45.5' },
-  'CASETA 8': { existenciaInicial: 0, entrada: 1796, consumo: 0, tipo: '', edad: '50.5' },
-  'CASETA 9': { existenciaInicial: 0, entrada: 1372, consumo: 0, tipo: '', edad: '52.5' }
-};
-
-const existenciaData: Record<CasetaKey, ExistenciaData> = {
-  'CASETA 1': { inicial: 12784, entrada: 0, mortalidad: 10, salida: 0, final: 12774 },
-  'CASETA 2': { inicial: 0, entrada: 0, mortalidad: 8, salida: 0, final: 0 },
-  'CASETA 3': { inicial: 16224, entrada: 0, mortalidad: 8, salida: 0, final: 16216 },
-  'CASETA 4': { inicial: 15404, entrada: 0, mortalidad: 5, salida: 0, final: 15399 },
-  'CASETA 5': { inicial: 16851, entrada: 0, mortalidad: 5, salida: 0, final: 16846 },
-  'CASETA 6': { inicial: 10019, entrada: 0, mortalidad: 12, salida: 1, final: 10006 },
-  'CASETA 7': { inicial: 16607, entrada: 0, mortalidad: 8, salida: 2, final: 16597 },
-  'CASETA 8': { inicial: 16472, entrada: 0, mortalidad: 10, salida: 7, final: 16455 },
-  'CASETA 9': { inicial: 16179, entrada: 0, mortalidad: 11, salida: 5, final: 16163 }
-};
-
-const envaseData: Record<CasetaKey, EnvaseData> = {
-  'CASETA 1': { tipo: 'CAJA TIPO A', inicial: 1009, recibido: 229, consumo: 246, final: 746 },
-  'CASETA 2': { tipo: 'SEPARADOR TIPO A', inicial: 1009, recibido: 229, consumo: 246, final: 746 },
-  'CASETA 3': { tipo: 'CAJA TIPO B', inicial: 0, recibido: 0, consumo: 46, final: 0 },
-  'CASETA 4': { tipo: 'SEPARADOR TIPO B', inicial: 0, recibido: 0, consumo: 46, final: 0 },
-  'CASETA 5': { tipo: 'CONO', inicial: 69.4, recibido: 0, consumo: 24, final: 86.74 },
-  'CASETA 6': { tipo: 'CONO 240 PZS', inicial: 11.5, recibido: 0, consumo: 1.75, final: 9.75 },
-  'CASETA 7': { tipo: 'CONO ESTRELLA', inicial: 0, recibido: 0, consumo: 0, final: 0 },
-  'CASETA 8': { tipo: 'CINTA', inicial: 14.7, recibido: 9, consumo: 7.75, final: 8.75 },
-  'CASETA 9': { tipo: 'CINTA BLANCA', inicial: 7.2, recibido: 1, consumo: 0.5, final: 1 }
-};
-
-type ResumenSeccionProps = {
-  navigation: any;
-};
-
-export default function ResumenSeccion({ navigation }: ResumenSeccionProps) {
-  const [selectedSeccion, setSelectedSeccion] = useState<CasetaKey>(secciones[0]);
-  const [showModal, setShowModal] = useState(false);
-
-  // Calcular totales
+  // Totales para cada tabla
   const totalesProduccion = useMemo(() => {
-    const totales: Record<ColumnaProduccion, ProduccionData> = {} as Record<ColumnaProduccion, ProduccionData>;
-    columnasProduccion.forEach(columna => {
-      totales[columna] = { cajas: 0, restos: 0 };
-      secciones.forEach(seccion => {
-        totales[columna].cajas += produccionSimulada[seccion][columna].cajas;
-        totales[columna].restos += produccionSimulada[seccion][columna].restos;
+    const tot: any = {};
+    columnasProduccion.forEach(col => {
+      tot[col] = { cajas: 0, restos: 0 };
+    });
+    produccion.forEach((row: any) => {
+      columnasProduccion.forEach(col => {
+        tot[col].cajas += row[`${col.toLowerCase()}_cajas`] || 0;
+        tot[col].restos += row[`${col.toLowerCase()}_restos`] || 0;
       });
     });
-    return totales;
-  }, []);
+    return tot;
+  }, [produccion]);
+
+  const totalesAlimento = useMemo(() => {
+    let existenciaInicial = 0, entrada = 0, consumo = 0;
+    alimento.forEach((row: any) => {
+      existenciaInicial += row.existencia_inicial || 0;
+      entrada += row.entrada || 0;
+      consumo += row.consumo || 0;
+    });
+    return { existenciaInicial, entrada, consumo };
+  }, [alimento]);
+
+  const totalesExistencia = useMemo(() => {
+    let inicial = 0, entrada = 0, mortalidad = 0, salida = 0, final = 0;
+    existencia.forEach((row: any) => {
+      inicial += row.inicial || 0;
+      entrada += row.entrada || 0;
+      mortalidad += row.mortalidad || 0;
+      salida += row.salida || 0;
+      final += row.final || 0;
+    });
+    return { inicial, entrada, mortalidad, salida, final };
+  }, [existencia]);
+
+  const totalesEnvase = useMemo(() => {
+    let inicial = 0, recibido = 0, consumo = 0, final = 0;
+    envase.forEach((row: any) => {
+      inicial += row.inicial || 0;
+      recibido += row.recibido || 0;
+      consumo += row.consumo || 0;
+      final += row.final || 0;
+    });
+    return { inicial, recibido, consumo, final };
+  }, [envase]);
+
+  // Exportar a PDF
+  const exportarPDF = async () => {
+    try {
+      let html = `<html><head><style>
+        @page { size: A4 landscape; margin: 18px; }
+        body { font-family: Arial, sans-serif; font-size: 11px; }
+        .titulo { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 2px; letter-spacing: 1px; }
+        .subtitulo { text-align: center; font-size: 14px; margin-bottom: 8px; }
+        .encabezado { display: flex; flex-direction: row; justify-content: space-between; margin-bottom: 2px; font-size: 12px; }
+        .encabezado span { font-weight: bold; }
+        .tabla-prod { border-collapse: collapse; width: 100%; margin-bottom: 8px; }
+        .tabla-prod th, .tabla-prod td { border: 1px solid #333; padding: 2px 3px; text-align: center; font-size: 10px; }
+        .tabla-prod th { background: #e0e7ef; font-size: 10px; }
+        .tabla-bloque { font-weight: bold; font-size: 12px; margin: 6px 0 2px 0; text-align: left; }
+        .tablas-inferiores { display: flex; flex-direction: row; gap: 6px; margin-top: 2px; }
+        .tabla-mini { border-collapse: collapse; width: 100%; font-size: 9.5px; }
+        .tabla-mini th, .tabla-mini td { border: 1px solid #333; padding: 2px 2px; text-align: center; }
+        .tabla-mini th { background: #e0e7ef; font-size: 9.5px; }
+        .obs { margin: 10px 0 0 0; font-size: 10px; border: 1px solid #333; min-height: 22px; padding: 2px 6px; }
+        .firmas { margin-top: 12px; display: flex; flex-direction: row; justify-content: space-between; }
+        .firma-block { flex: 1; text-align: center; font-size: 10px; }
+        .firma-label { border-top: none; margin-top: 8px; padding-top: 2px; font-size: 9px; }
+        .firma-line { border-top: 1px solid #333; width: 70%; margin: 18px auto 2px auto; height: 0; }
+      </style></head><body>`;
+      html += `<div class='titulo'>UNION AGROPECUARIA ALZE SA DE CV.</div>`;
+      html += `<div class='subtitulo'>REPORTE DE PRODUCCIÓN DIARIA EN GRANJAS</div>`;
+      html += `<div class='encabezado'><span>SECCIÓN: ${seccionSeleccionada || ''}</span><span>FECHA: ${fecha}</span></div>`;
+      // PRODUCCIÓN
+      html += `<div class='tabla-bloque'>PRODUCCIÓN</div>`;
+      html += `<table class='tabla-prod'><tr><th rowspan='2'>CASETA</th>`;
+      columnasProduccion.forEach(col => {
+        html += `<th colspan='2'>${col}</th>`;
+      });
+      html += `</tr><tr>`;
+      columnasProduccion.forEach(() => {
+        html += `<th>Cajas</th><th>Restos</th>`;
+      });
+      html += `</tr>`;
+      casetas.forEach(caseta => {
+        const row = produccion.find((r: any) => r.caseta === caseta) || {};
+        html += `<tr><td>${caseta}</td>`;
+        columnasProduccion.forEach(col => {
+          html += `<td>${row[`${col.toLowerCase()}_cajas`] || ''}</td><td>${row[`${col.toLowerCase()}_restos`] || ''}</td>`;
+        });
+        html += `</tr>`;
+      });
+      // Totales Producción
+      html += `<tr><td><b>TOTAL</b></td>`;
+      columnasProduccion.forEach(col => {
+        html += `<td><b>${totalesProduccion[col].cajas}</b></td><td><b>${totalesProduccion[col].restos}</b></td>`;
+      });
+      html += `</tr></table>`;
+      // Tablas inferiores alineadas horizontalmente
+      html += `<div class='tablas-inferiores'>`;
+      // ALIMENTO
+      html += `<div style='flex:1;'><div class='tabla-bloque'>ALIMENTO</div>`;
+      html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>CONSUMO</th><th>TIPO</th></tr>`;
+      casetas.forEach(caseta => {
+        const row = alimento.find((r: any) => r.caseta === caseta) || {};
+        html += `<tr><td>${caseta}</td><td>${row.existencia_inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.consumo || ''}</td><td>${row.tipo || ''}</td></tr>`;
+      });
+      html += `<tr><td><b>TOTAL</b></td><td><b>${totalesAlimento.existenciaInicial}</b></td><td><b>${totalesAlimento.entrada}</b></td><td><b>${totalesAlimento.consumo}</b></td><td></td></tr></table></div>`;
+      // EXISTENCIA
+      html += `<div style='flex:1;'><div class='tabla-bloque'>EXISTENCIA</div>`;
+      html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>MORTALIDAD</th><th>SALIDA</th><th>EDAD</th><th>EXIST. FINAL</th></tr>`;
+      casetas.forEach(caseta => {
+        const row = existencia.find((r: any) => r.caseta === caseta) || {};
+        html += `<tr><td>${caseta}</td><td>${row.inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.mortalidad || ''}</td><td>${row.salida || ''}</td><td>${row.edad || ''}</td><td>${row.final || ''}</td></tr>`;
+      });
+      html += `<tr><td><b>TOTAL</b></td><td><b>${totalesExistencia.inicial}</b></td><td><b>${totalesExistencia.entrada}</b></td><td><b>${totalesExistencia.mortalidad}</b></td><td><b>${totalesExistencia.salida}</b></td><td></td><td><b>${totalesExistencia.final}</b></td></tr></table></div>`;
+      // ENVASE
+      html += `<div style='flex:1;'><div class='tabla-bloque'>ENVASE</div>`;
+      html += `<table class='tabla-mini'><tr><th>TIPO</th><th>EXIST. INICIAL</th><th>RECIBIDO</th><th>CONSUMO</th><th>EXIST. FINAL</th></tr>`;
+      envases.forEach(envaseTipo => {
+        const row = envase.find((r: any) => r.tipo === envaseTipo) || {};
+        html += `<tr><td>${envaseTipo}</td><td>${row.inicial || ''}</td><td>${row.recibido || ''}</td><td>${row.consumo || ''}</td><td>${row.final || ''}</td></tr>`;
+      });
+      html += `<tr><td><b>TOTAL</b></td><td><b>${totalesEnvase.inicial}</b></td><td><b>${totalesEnvase.recibido}</b></td><td><b>${totalesEnvase.consumo}</b></td><td><b>${totalesEnvase.final}</b></td></tr></table></div>`;
+      html += `</div>`;
+      // OBSERVACIONES
+      html += `<div class='obs'>OBS.</div>`;
+      // FIRMAS SOLO LÍNEAS Y ETIQUETAS, CADA UNA INDEPENDIENTE
+      html += `<div class='firmas'>
+        <div class='firma-block'><div class='firma-line'></div><div class='firma-label'>FIRMA Y NOMBRE ENCARGADO</div></div>
+        <div class='firma-block'><div class='firma-line'></div><div class='firma-label'>FIRMA Y NOMBRE SUPERVISOR</div></div>
+        <div class='firma-block'><div class='firma-line'></div><div class='firma-label'>FIRMA Y NOMBRE DE CHOFER</div></div>
+      </div>`;
+      html += `</body></html>`;
+      await Print.printAsync({ html });
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo exportar el PDF.');
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.companyName}>UNION AGROPECUARIA ALZE SA DE CV.</Text>
-        <Text style={styles.reportTitle}>REPORTE DE PRODUCCION DIARIA EN GRANJAS</Text>
-        <View style={styles.headerInfo}>
-          <View style={styles.sectionBox}>
-            <Text style={styles.sectionLabel}>SECCIÓN</Text>
-            <Text style={styles.sectionValue}>C</Text>
-          </View>
-          <View style={styles.dateBox}>
-            <Text style={styles.dateLabel}>FECHA</Text>
-            <Text style={styles.dateValue}>17-25</Text>
-          </View>
-        </View>
-      </View>
-
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Producción Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PRODUCCIÓN</Text>
-          
-          {/* Headers */}
-          <View style={styles.productionHeader}>
-            <Text style={[styles.headerCell, { width: 60 }]}>TIPO</Text>
-            {columnasProduccion.map(col => (
-              <View key={col} style={styles.productionColumn}>
-                <Text style={styles.columnTitle}>{col}</Text>
-                <View style={styles.subHeaders}>
-                  <Text style={styles.subHeader}>CAJAS</Text>
-                  <Text style={styles.subHeader}>RESTOS</Text>
-                </View>
-              </View>
-            ))}
-            <View style={styles.totalColumn}>
-              <Text style={styles.columnTitle}>TOTAL</Text>
-              <View style={styles.subHeaders}>
-                <Text style={styles.subHeader}>CAJAS</Text>
-                <Text style={styles.subHeader}>RESTOS</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Data Rows */}
-          {secciones.map((seccion, index) => (
-            <View key={seccion} style={[styles.dataRow, index % 2 === 0 && styles.evenRow]}>
-              <Text style={[styles.dataCell, { width: 60 }]}>{seccion}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView>
+        <Text style={styles.title}>Resumen de la sección {seccionSeleccionada} - {fecha}</Text>
+        {/* Producción */}
+        <Text style={styles.sectionTitle}>Producción</Text>
+        <ScrollView horizontal>
+          <View style={styles.table}>
+            <View style={styles.headerRow}>
+              <Text style={styles.headerCell}>CASETA</Text>
               {columnasProduccion.map(col => (
-                <View key={col} style={styles.productionColumn}>
-                  <Text style={styles.dataValue}>{produccionSimulada[seccion][col].cajas}</Text>
-                  <Text style={styles.dataValue}>{produccionSimulada[seccion][col].restos}</Text>
-                </View>
+                <Text key={col} style={styles.headerCell}>{col} Cajas</Text>
               ))}
-              <View style={styles.totalColumn}>
-                <Text style={styles.dataValue}>
-                  {columnasProduccion.reduce((sum, col) => sum + produccionSimulada[seccion][col].cajas, 0)}
-                </Text>
-                <Text style={styles.dataValue}>
-                  {columnasProduccion.reduce((sum, col) => sum + produccionSimulada[seccion][col].restos, 0)}
-                </Text>
-              </View>
+              {columnasProduccion.map(col => (
+                <Text key={col + 'r'} style={styles.headerCell}>{col} Restos</Text>
+              ))}
             </View>
-          ))}
-
-          {/* Total Row */}
-          <View style={[styles.dataRow, styles.totalRow]}>
-            <Text style={[styles.dataCell, { width: 60, fontWeight: 'bold' }]}>TOTAL</Text>
-            {columnasProduccion.map(col => (
-              <View key={col} style={styles.productionColumn}>
-                <Text style={[styles.dataValue, styles.totalValue]}>{totalesProduccion[col].cajas}</Text>
-                <Text style={[styles.dataValue, styles.totalValue]}>{totalesProduccion[col].restos}</Text>
-              </View>
-            ))}
-            <View style={styles.totalColumn}>
-              <Text style={[styles.dataValue, styles.totalValue]}>
-                {Object.values(totalesProduccion).reduce((sum, item) => sum + item.cajas, 0)}
-              </Text>
-              <Text style={[styles.dataValue, styles.totalValue]}>
-                {Object.values(totalesProduccion).reduce((sum, item) => sum + item.restos, 0)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Bottom Sections Row */}
-        <View style={styles.bottomSections}>
-          {/* Alimento */}
-          <View style={styles.bottomSection}>
-            <Text style={styles.bottomSectionTitle}>ALIMENTO</Text>
-            <View style={styles.bottomTable}>
-              <View style={styles.bottomHeader}>
-                <Text style={styles.bottomHeaderCell}>SECCIÓN</Text>
-                <Text style={styles.bottomHeaderCell}>EXISTENCIA INICIAL</Text>
-                <Text style={styles.bottomHeaderCell}>ENTRADA</Text>
-                <Text style={styles.bottomHeaderCell}>CONSUMO</Text>
-                <Text style={styles.bottomHeaderCell}>TIPO</Text>
-                <Text style={styles.bottomHeaderCell}>EDAD</Text>
-              </View>
-              {secciones.map((seccion, index) => (
-                <View key={seccion} style={[styles.bottomRow, index % 2 === 0 && styles.evenRow]}>
-                  <Text style={styles.bottomCell}>{seccion}</Text>
-                  <Text style={styles.bottomCell}>{alimentoData[seccion].existenciaInicial}</Text>
-                  <Text style={styles.bottomCell}>{alimentoData[seccion].entrada}</Text>
-                  <Text style={styles.bottomCell}>{alimentoData[seccion].consumo}</Text>
-                  <Text style={styles.bottomCell}>{alimentoData[seccion].tipo}</Text>
-                  <Text style={styles.bottomCell}>{alimentoData[seccion].edad}</Text>
+            {casetas.map(caseta => {
+              const row = produccion.find((r: any) => r.caseta === caseta) || {};
+              return (
+                <View key={caseta} style={styles.dataRow}>
+                  <Text style={styles.casetaCell}>{caseta}</Text>
+                  {columnasProduccion.map(col => (
+                    <Text key={col} style={styles.inputCell}>{row[`${col.toLowerCase()}_cajas`] || ''}</Text>
+                  ))}
+                  {columnasProduccion.map(col => (
+                    <Text key={col + 'r'} style={styles.inputCell}>{row[`${col.toLowerCase()}_restos`] || ''}</Text>
+                  ))}
                 </View>
+              );
+            })}
+            {/* Totales */}
+            <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
+              <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
+              {columnasProduccion.map(col => (
+                <Text key={col} style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesProduccion[col].cajas}</Text>
+              ))}
+              {columnasProduccion.map(col => (
+                <Text key={col + 'r'} style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesProduccion[col].restos}</Text>
               ))}
             </View>
           </View>
-
-          {/* Existencia */}
-          <View style={styles.bottomSection}>
-            <Text style={styles.bottomSectionTitle}>EXISTENCIA</Text>
-            <View style={styles.bottomTable}>
-              <View style={styles.bottomHeader}>
-                <Text style={styles.bottomHeaderCell}>SECCIÓN</Text>
-                <Text style={styles.bottomHeaderCell}>EXISTENCIA INICIAL AVES</Text>
-                <Text style={styles.bottomHeaderCell}>ENTRADA AVES</Text>
-                <Text style={styles.bottomHeaderCell}>MORTALIDAD AVES</Text>
-                <Text style={styles.bottomHeaderCell}>SALIDA AVES</Text>
-                <Text style={styles.bottomHeaderCell}>EXISTENCIA FINAL AVES</Text>
-              </View>
-              {secciones.map((seccion, index) => (
-                <View key={seccion} style={[styles.bottomRow, index % 2 === 0 && styles.evenRow]}>
-                  <Text style={styles.bottomCell}>{seccion}</Text>
-                  <Text style={styles.bottomCell}>{existenciaData[seccion].inicial}</Text>
-                  <Text style={styles.bottomCell}>{existenciaData[seccion].entrada}</Text>
-                  <Text style={styles.bottomCell}>{existenciaData[seccion].mortalidad}</Text>
-                  <Text style={styles.bottomCell}>{existenciaData[seccion].salida}</Text>
-                  <Text style={styles.bottomCell}>{existenciaData[seccion].final}</Text>
+        </ScrollView>
+        {/* Alimento */}
+        <Text style={styles.sectionTitle}>Alimento</Text>
+        <ScrollView horizontal>
+          <View style={styles.table}>
+            <View style={styles.headerRow}>
+              <Text style={styles.headerCell}>CASETA</Text>
+              <Text style={styles.headerCell}>EXISTENCIA INICIAL</Text>
+              <Text style={styles.headerCell}>ENTRADA</Text>
+              <Text style={styles.headerCell}>CONSUMO</Text>
+              <Text style={styles.headerCell}>TIPO</Text>
+            </View>
+            {casetas.map(caseta => {
+              const row = alimento.find((r: any) => r.caseta === caseta) || {};
+              return (
+                <View key={caseta} style={styles.dataRow}>
+                  <Text style={styles.casetaCell}>{caseta}</Text>
+                  <Text style={styles.inputCell}>{row.existencia_inicial || ''}</Text>
+                  <Text style={styles.inputCell}>{row.entrada || ''}</Text>
+                  <Text style={styles.inputCell}>{row.consumo || ''}</Text>
+                  <Text style={styles.inputCell}>{row.tipo || ''}</Text>
                 </View>
-              ))}
+              );
+            })}
+            <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
+              <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesAlimento.existenciaInicial}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesAlimento.entrada}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesAlimento.consumo}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}></Text>
             </View>
           </View>
-
-          {/* Envase */}
-          <View style={styles.bottomSection}>
-            <Text style={styles.bottomSectionTitle}>ENVASE</Text>
-            <View style={styles.bottomTable}>
-              <View style={styles.bottomHeader}>
-                <Text style={styles.bottomHeaderCell}>SECCIÓN</Text>
-                <Text style={styles.bottomHeaderCell}>ENVASE</Text>
-                <Text style={styles.bottomHeaderCell}>EXISTENCIA INICIAL</Text>
-                <Text style={styles.bottomHeaderCell}>RECIBIDO</Text>
-                <Text style={styles.bottomHeaderCell}>CONSUMO</Text>
-                <Text style={styles.bottomHeaderCell}>EXISTENCIA FINAL</Text>
-              </View>
-              {secciones.map((seccion, index) => (
-                <View key={seccion} style={[styles.bottomRow, index % 2 === 0 && styles.evenRow]}>
-                  <Text style={styles.bottomCell}>{seccion}</Text>
-                  <Text style={styles.bottomCell}>{envaseData[seccion].tipo}</Text>
-                  <Text style={styles.bottomCell}>{envaseData[seccion].inicial}</Text>
-                  <Text style={styles.bottomCell}>{envaseData[seccion].recibido}</Text>
-                  <Text style={styles.bottomCell}>{envaseData[seccion].consumo}</Text>
-                  <Text style={styles.bottomCell}>{envaseData[seccion].final}</Text>
+        </ScrollView>
+        {/* Existencia */}
+        <Text style={styles.sectionTitle}>Existencia</Text>
+        <ScrollView horizontal>
+          <View style={styles.table}>
+            <View style={styles.headerRow}>
+              <Text style={styles.headerCell}>CASETA</Text>
+              <Text style={styles.headerCell}>EXIST. INICIAL</Text>
+              <Text style={styles.headerCell}>ENTRADA</Text>
+              <Text style={styles.headerCell}>MORTALIDAD</Text>
+              <Text style={styles.headerCell}>SALIDA</Text>
+              <Text style={styles.headerCell}>EDAD</Text>
+              <Text style={styles.headerCell}>EXIST. FINAL</Text>
+            </View>
+            {casetas.map(caseta => {
+              const row = existencia.find((r: any) => r.caseta === caseta) || {};
+              return (
+                <View key={caseta} style={styles.dataRow}>
+                  <Text style={styles.casetaCell}>{caseta}</Text>
+                  <Text style={styles.inputCell}>{row.inicial || ''}</Text>
+                  <Text style={styles.inputCell}>{row.entrada || ''}</Text>
+                  <Text style={styles.inputCell}>{row.mortalidad || ''}</Text>
+                  <Text style={styles.inputCell}>{row.salida || ''}</Text>
+                  <Text style={styles.inputCell}>{row.edad || ''}</Text>
+                  <Text style={styles.inputCell}>{row.final || ''}</Text>
                 </View>
-              ))}
+              );
+            })}
+            <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
+              <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.inicial}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.entrada}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.mortalidad}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.salida}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}></Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.final}</Text>
             </View>
           </View>
-        </View>
-
-        {/* Signature Section */}
-        <View style={styles.signatureSection}>
-          <View style={styles.signatureBox}>
-            <Text style={styles.signatureLabel}>FIRMA Y NOMBRE ENCARGADO</Text>
-            <View style={styles.signatureLine} />
+        </ScrollView>
+        {/* Envase */}
+        <Text style={styles.sectionTitle}>Envase</Text>
+        <ScrollView horizontal>
+          <View style={styles.table}>
+            <View style={styles.headerRow}>
+              <Text style={styles.headerCell}>TIPO</Text>
+              <Text style={styles.headerCell}>EXIST. INICIAL</Text>
+              <Text style={styles.headerCell}>RECIBIDO</Text>
+              <Text style={styles.headerCell}>CONSUMO</Text>
+              <Text style={styles.headerCell}>EXIST. FINAL</Text>
+            </View>
+            {envases.map(envaseTipo => {
+              const row = envase.find((r: any) => r.tipo === envaseTipo) || {};
+              return (
+                <View key={envaseTipo} style={styles.dataRow}>
+                  <Text style={styles.casetaCell}>{envaseTipo}</Text>
+                  <Text style={styles.inputCell}>{row.inicial || ''}</Text>
+                  <Text style={styles.inputCell}>{row.recibido || ''}</Text>
+                  <Text style={styles.inputCell}>{row.consumo || ''}</Text>
+                  <Text style={styles.inputCell}>{row.final || ''}</Text>
+                </View>
+              );
+            })}
+            <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
+              <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesEnvase.inicial}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesEnvase.recibido}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesEnvase.consumo}</Text>
+              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesEnvase.final}</Text>
+            </View>
           </View>
-          <View style={styles.signatureBox}>
-            <Text style={styles.signatureLabel}>FIRMA Y NOMBRE SUPERVISOR</Text>
-            <View style={styles.signatureLine} />
-          </View>
-          <View style={styles.signatureBox}>
-            <Text style={styles.signatureLabel}>FIRMA Y NOMBRE DE CHOFER</Text>
-            <View style={styles.signatureLine} />
-          </View>
-        </View>
+        </ScrollView>
+        {/* Botón exportar */}
+        <TouchableOpacity style={styles.btnExportar} onPress={exportarPDF}>
+          <Text style={styles.btnExportarText}>Exportar a PDF</Text>
+        </TouchableOpacity>
+        {/* Inputs de firmas y nombres eliminados */}
       </ScrollView>
-
-      {/* Modal para seleccionar sección */}
-      <Modal visible={showModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {secciones.map(seccion => (
-              <TouchableOpacity
-                key={seccion}
-                style={styles.modalItem}
-                onPress={() => {
-                  setSelectedSeccion(seccion);
-                  setShowModal(false);
-                }}
-              >
-                <Text style={styles.modalText}>{seccion}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity onPress={() => setShowModal(false)} style={styles.modalClose}>
-              <Text style={styles.modalCloseText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Botón regresar */}
-      <TouchableOpacity style={styles.btnBack} onPress={() => navigation.goBack()}>
-        <Icon name="arrow-back" size={28} color="#fff" />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#f5f5f5' 
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: '#4a90e2',
-    elevation: 3,
-  },
-  companyName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#4a90e2',
-    marginBottom: 4,
-  },
-  reportTitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    color: '#333',
-    marginBottom: 12,
-  },
-  headerInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionBox: {
-    borderWidth: 1,
-    borderColor: '#333',
-    padding: 8,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  sectionLabel: {
-    fontSize: 10,
-    color: '#666',
-  },
-  sectionValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  dateBox: {
-    borderWidth: 1,
-    borderColor: '#333',
-    padding: 8,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  dateLabel: {
-    fontSize: 10,
-    color: '#666',
-  },
-  dateValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  scroll: {
-    flex: 1,
-    padding: 8,
-  },
-  section: {
-    backgroundColor: '#fff',
-    marginBottom: 16,
-    borderRadius: 8,
-    padding: 12,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4a90e2',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  productionHeader: {
-    flexDirection: 'row',
-    borderBottomWidth: 2,
-    borderBottomColor: '#333',
-    paddingBottom: 8,
-    marginBottom: 8,
-  },
-  headerCell: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#333',
-  },
-  productionColumn: {
-    flex: 1,
-    alignItems: 'center',
-    borderLeftWidth: 1,
-    borderLeftColor: '#ddd',
-    paddingHorizontal: 2,
-  },
-  totalColumn: {
-    flex: 1,
-    alignItems: 'center',
-    borderLeftWidth: 2,
-    borderLeftColor: '#333',
-    paddingHorizontal: 2,
-  },
-  columnTitle: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#333',
-    marginBottom: 4,
-  },
-  subHeaders: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-  },
-  subHeader: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#666',
-    flex: 1,
-    textAlign: 'center',
-  },
-  dataRow: {
-    flexDirection: 'row',
-    paddingVertical: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  evenRow: {
-    backgroundColor: '#f9f9f9',
-  },
-  dataCell: {
-    fontSize: 10,
-    textAlign: 'center',
-    color: '#333',
-  },
-  dataValue: {
-    fontSize: 9,
-    textAlign: 'center',
-    color: '#333',
-    flex: 1,
-  },
-  totalRow: {
-    backgroundColor: '#e8f4f8',
-    borderTopWidth: 2,
-    borderTopColor: '#333',
-  },
-  totalValue: {
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  bottomSections: {
-    marginBottom: 20,
-  },
-  bottomSection: {
-    backgroundColor: '#fff',
-    marginBottom: 12,
-    borderRadius: 8,
-    padding: 12,
-    elevation: 2,
-  },
-  bottomSectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#4a90e2',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  bottomTable: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
-  },
-  bottomHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f0f0f0',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  bottomHeaderCell: {
-    flex: 1,
-    fontSize: 8,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    padding: 6,
-    color: '#333',
-    borderRightWidth: 1,
-    borderRightColor: '#ddd',
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  bottomCell: {
-    flex: 1,
-    fontSize: 8,
-    textAlign: 'center',
-    padding: 6,
-    color: '#333',
-    borderRightWidth: 1,
-    borderRightColor: '#eee',
-  },
-  signatureSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    elevation: 2,
-    marginBottom: 20,
-  },
-  signatureBox: {
-    flex: 1,
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  signatureLabel: {
-    fontSize: 8,
-    color: '#666',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  signatureLine: {
-    width: '100%',
-    height: 1,
-    backgroundColor: '#333',
-    marginTop: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    width: '80%',
-    maxHeight: '60%',
-  },
-  modalItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderBottomColor: '#ccc',
-    borderBottomWidth: 1,
-  },
-  modalText: {
-    fontSize: 18,
-    color: '#517aa2',
-  },
-  modalClose: {
-    padding: 14,
-    alignItems: 'center',
-  },
-  modalCloseText: {
-    color: '#749BC2',
-    fontWeight: 'bold',
-  },
-  btnBack: {
-    position: 'absolute',
-    top: 40,
-    left: 12,
-    backgroundColor: '#4a90e2',
-    padding: 10,
-    borderRadius: 30,
-    elevation: 5,
-  },
+  safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
+  title: { fontSize: 18, fontWeight: 'bold', margin: 12, textAlign: 'center', color: '#333' },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginTop: 18, marginBottom: 6, color: '#517aa2', textAlign: 'left', marginLeft: 12 },
+  table: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 8, margin: 8, backgroundColor: '#fff' },
+  headerRow: { flexDirection: 'row', backgroundColor: '#dbeafe', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+  headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 90, textAlign: 'center', color: '#222' },
+  dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
+  casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 90, textAlign: 'center', color: '#333' },
+  inputCell: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, width: 90, height: 32, margin: 2, textAlign: 'center', backgroundColor: '#f8fafc', fontSize: 13, color: '#222' },
+  btnExportar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
+  btnExportarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  inputFirma: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 6, padding: 8, marginBottom: 6, backgroundColor: '#fff', fontSize: 13 },
 });

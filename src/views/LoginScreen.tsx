@@ -45,7 +45,7 @@ export default function LoginScreen() {
     }
 
     if (email === 'encargadoalze@gmail.com' && password === 'Encargadoalze09') {
-      navigation.replace('Menu');
+      navigation.replace('SeleccionSeccion');
     } else {
       Alert.alert('Error', 'Correo o contraseña incorrectos, inténtale de nuevo.');
     }

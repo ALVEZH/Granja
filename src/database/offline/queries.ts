@@ -84,8 +84,8 @@ export class DatabaseQueries {
     const db = dbManager.getDatabase()
     const query = `
       INSERT OR REPLACE INTO existencia (
-        caseta, fecha, inicial, entrada, mortalidad, salida, final
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        caseta, fecha, inicial, entrada, mortalidad, salida, edad, final
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `
 
     await db.runAsync(query, [
@@ -95,6 +95,7 @@ export class DatabaseQueries {
       data.entrada,
       data.mortalidad,
       data.salida,
+      data.edad,
       data.final,
     ])
   }

@@ -1,30 +1,10 @@
 "use client"
-
-import type React from "react"
-import { useState, useCallback, useMemo, useEffect } from "react"
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Modal,
-  Alert,
-  ActivityIndicator,
-} from "react-native"
-import DateTimePicker from "@react-native-community/datetimepicker"
-import Icon from "react-native-vector-icons/MaterialIcons"
-import { dbManager } from "../database/offline/db"
-import { DatabaseQueries } from "../database/offline/queries"
-import type { EnvaseData } from "../database/offline/types"
-
-// Constantes
-const secciones = Array.from({ length: 10 }, (_, i) => `SECCIÓN ${i + 1}`)
-const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`)
+import React, { useState, useMemo } from 'react';
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
+import { DatabaseQueries } from '../database/offline/queries';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
 
 const envases = [
   "CAJA TIPO A",
@@ -36,630 +16,159 @@ const envases = [
   "CONO ESTRELLA",
   "CINTA",
   "CINTA BLANCA",
-]
-
-type FormData = {
-  tipo: string
-  existenciaInicial: string
-  recibido: string
-  consumo: string
-  existenciaFinal: string
-}
-
-// Input personalizado
-const CustomInput = ({
-  label,
-  value,
-  onChangeText,
-}: {
-  label: string
-  value: string
-  onChangeText: (text: string) => void
-}) => (
-  <View style={styles.inputContainer}>
-    <TextInput
-      style={styles.input}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={label}
-      keyboardType="numeric"
-      placeholderTextColor="#94a3b8"
-    />
-    {value ? <Text style={styles.floatingLabel}>{label}</Text> : null}
-  </View>
-)
-
-// Tarjeta reutilizable
-const Card = ({ children }: { children: React.ReactNode }) => <View style={styles.card}>{children}</View>
-
-// Botón reutilizable
-const Button = ({
-  title,
-  onPress,
-  icon,
-  disabled = false,
-}: {
-  title: string
-  onPress: () => void
-  icon?: string
-  disabled?: boolean
-}) => (
-  <TouchableOpacity style={[styles.button, disabled && styles.buttonDisabled]} onPress={onPress} disabled={disabled}>
-    {icon && <Icon name={icon} size={20} color="#fff" style={{ marginRight: 8 }} />}
-    <Text style={styles.buttonText}>{title}</Text>
-  </TouchableOpacity>
-)
+];
+const columnas = ['Existencia Inicial', 'Recibido', 'Consumo'];
 
 export default function EnvaseScreen() {
-  const [formData, setFormData] = useState<FormData>({
-    tipo: "",
-    existenciaInicial: "",
-    recibido: "",
-    consumo: "",
-    existenciaFinal: "",
-  })
+  const route = useRoute();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const seccionSeleccionada = (route as any).params?.seccionSeleccionada;
+  // Elimina el estado de fecha y usa siempre la fecha actual en el render
+  // const [fecha, setFecha] = useState(() => {
+  //   const today = new Date();
+  //   return today.toISOString().split('T')[0];
+  // });
+  const fechaHoy = new Date().toISOString().split('T')[0];
 
-  const [selectedSeccion, setSelectedSeccion] = useState(secciones[0])
-  const [selectedCaseta, setSelectedCaseta] = useState<string | null>(null)
-  const [fecha, setFecha] = useState(new Date())
-  const [showDatePicker, setShowDatePicker] = useState(false)
-  const [showModalSeccion, setShowModalSeccion] = useState(false)
-  const [showModalEnvase, setShowModalEnvase] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [isDbReady, setIsDbReady] = useState(false)
-  const [envaseDataList, setEnvaseDataList] = useState<EnvaseData[]>([])
+  // Estructura: { [envase]: { existenciaInicial, recibido, consumo, existenciaFinal } }
+  const [tabla, setTabla] = useState(() => {
+    const obj: any = {};
+    envases.forEach(envase => {
+      obj[envase] = { existenciaInicial: '', recibido: '', consumo: '', existenciaFinal: '0' };
+    });
+    return obj;
+  });
 
-  const formattedDate = useMemo(
-    () => fecha.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }),
-    [fecha],
-  )
+  // Calcular totales y existencia final
+  const totales = useMemo(() => {
+    let existenciaInicial = 0, recibido = 0, consumo = 0, existenciaFinal = 0;
+    envases.forEach(envase => {
+      const inicial = Number(tabla[envase].existenciaInicial) || 0;
+      const rec = Number(tabla[envase].recibido) || 0;
+      const cons = Number(tabla[envase].consumo) || 0;
+      const final = inicial + rec - cons;
+      existenciaInicial += inicial;
+      recibido += rec;
+      consumo += cons;
+      existenciaFinal += final;
+    });
+    return { existenciaInicial, recibido, consumo, existenciaFinal };
+  }, [tabla]);
 
-  const formattedDateForDB = useMemo(() => fecha.toISOString().split("T")[0], [fecha])
-
-  // Inicializar base de datos
-  useEffect(() => {
-    const initDB = async () => {
-      try {
-        await dbManager.init()
-        setIsDbReady(true)
-      } catch (error) {
-        console.error("Error al inicializar DB:", error)
-        Alert.alert("Error", "No se pudo inicializar la base de datos")
-      }
-    }
-    initDB()
-  }, [])
-
-  // Cargar datos cuando cambia la fecha
-  useEffect(() => {
-    if (isDbReady) {
-      loadDataByFecha()
-    }
-  }, [fecha, isDbReady])
-
-  // Cargar datos existentes cuando se selecciona una caseta
-  useEffect(() => {
-    if (selectedCaseta && isDbReady) {
-      loadExistingData()
-    }
-  }, [selectedCaseta, envaseDataList])
-
-  const loadDataByFecha = async () => {
-    try {
-      const data = await DatabaseQueries.getEnvaseByFecha(formattedDateForDB)
-      setEnvaseDataList(data)
-    } catch (error) {
-      console.error("Error al cargar datos:", error)
-    }
-  }
-
-  const loadExistingData = () => {
-    if (!selectedCaseta) return
-
-    const casetaData = envaseDataList.find((d) => d.caseta === selectedCaseta)
-
-    if (casetaData) {
-      setFormData({
-        tipo: casetaData.tipo,
-        existenciaInicial: casetaData.inicial.toString(),
-        recibido: casetaData.recibido.toString(),
-        consumo: casetaData.consumo.toString(),
-        existenciaFinal: casetaData.final.toString(),
-      })
-    } else {
-      resetForm()
-    }
-  }
-
-  const resetForm = () => {
-    setFormData({
-      tipo: "",
-      existenciaInicial: "",
-      recibido: "",
-      consumo: "",
-      existenciaFinal: "",
-    })
-  }
-
-  const handleDateChange = useCallback((_: any, date?: Date) => {
-    setShowDatePicker(false)
-    if (date) setFecha(date)
-  }, [])
-
-  const handleChange = useCallback((campo: keyof FormData, valor: string) => {
-    setFormData((prev) => {
-      const nuevoRegistro = {
+  // Manejar cambios en la tabla
+  const handleChange = (envase: string, campo: string, valor: string) => {
+    setTabla((prev: any) => {
+      const newTabla = {
         ...prev,
-        [campo]: valor,
-      }
+        [envase]: {
+          ...prev[envase],
+          [campo]: valor.replace(/[^0-9.]/g, '')
+        }
+      };
+      // Calcular existencia final para este envase
+      const inicial = Number(newTabla[envase].existenciaInicial) || 0;
+      const recibido = Number(newTabla[envase].recibido) || 0;
+      const consumo = Number(newTabla[envase].consumo) || 0;
+      newTabla[envase].existenciaFinal = String(inicial + recibido - consumo);
+      return newTabla;
+    });
+  };
 
-      // Calcular existencia final automáticamente
-      if (campo !== "existenciaFinal") {
-        const inicial = Number.parseFloat(nuevoRegistro.existenciaInicial) || 0
-        const recibido = Number.parseFloat(nuevoRegistro.recibido) || 0
-        const consumo = Number.parseFloat(nuevoRegistro.consumo) || 0
-        nuevoRegistro.existenciaFinal = (inicial + recibido - consumo).toString()
-      }
-
-      return nuevoRegistro
-    })
-  }, [])
-
-  const handleSave = async () => {
-    if (!selectedCaseta || !isDbReady) {
-      Alert.alert("Error", "Selecciona una caseta primero")
-      return
-    }
-
-    if (!formData.tipo) {
-      Alert.alert("Error", "Selecciona un tipo de envase")
-      return
-    }
-
-    setLoading(true)
+  // Guardar datos en la base de datos
+  const handleGuardar = async () => {
     try {
-      const envaseData: EnvaseData = {
-        caseta: selectedCaseta,
-        fecha: formattedDateForDB,
-        tipo: formData.tipo,
-        inicial: Number.parseFloat(formData.existenciaInicial) || 0,
-        recibido: Number.parseFloat(formData.recibido) || 0,
-        consumo: Number.parseFloat(formData.consumo) || 0,
-        final: Number.parseFloat(formData.existenciaFinal) || 0,
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      for (const envase of envases) {
+        const data: any = {
+          caseta: seccionSeleccionada, // Guardamos la sección como caseta para mantener consistencia
+          fecha: fechaHoy,
+          tipo: envase,
+          inicial: Number(tabla[envase].existenciaInicial) || 0,
+          recibido: Number(tabla[envase].recibido) || 0,
+          consumo: Number(tabla[envase].consumo) || 0,
+          final: Number(tabla[envase].existenciaFinal) || 0,
+        };
+        await DatabaseQueries.insertEnvase(data);
       }
-
-      await DatabaseQueries.insertEnvase(envaseData)
-
-      Alert.alert("Éxito", `Datos de envase guardados para ${selectedCaseta} - ${formattedDate}`, [
-        {
-          text: "OK",
-          onPress: () => {
-            setSelectedCaseta(null)
-            resetForm()
-            loadDataByFecha() // Recargar datos
-          },
-        },
-      ])
+      Alert.alert('Éxito', 'Datos de envase guardados correctamente.');
+      navigation.replace('ResumenSeccion', { seccionSeleccionada } as any);
     } catch (error) {
-      console.error("Error al guardar:", error)
-      Alert.alert("Error", "No se pudieron guardar los datos")
-    } finally {
-      setLoading(false)
+      console.error('Error al guardar:', error);
+      Alert.alert('Error', 'No se pudieron guardar los datos.');
     }
-  }
-
-  const handleCancel = () => {
-    Alert.alert("Cancelar", "¿Estás seguro de que quieres cancelar? Se perderán los cambios no guardados.", [
-      { text: "No", style: "cancel" },
-      {
-        text: "Sí",
-        onPress: () => {
-          setSelectedCaseta(null)
-          resetForm()
-        },
-      },
-    ])
-  }
-
-  const progresoCasetas = useMemo(() => {
-    const completadas = envaseDataList.length
-    const total = casetas.length
-    return completadas / total
-  }, [envaseDataList])
-
-  if (!isDbReady) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#749BC2" />
-          <Text style={styles.loadingText}>Inicializando base de datos...</Text>
-        </View>
-      </SafeAreaView>
-    )
-  }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header: selector sección y fecha */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setShowModalSeccion(true)} style={styles.seccionSelector}>
-          <Text style={styles.seccionText}>{selectedSeccion}</Text>
-          <Icon name="arrow-drop-down" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateSelector}>
-          <Text style={styles.dateText}>{formattedDate}</Text>
-          <Icon name="event" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Progreso */}
-      <View style={styles.progressContainer}>
-        <Text style={styles.progressLabel}>
-          Progreso de Casetas ({envaseDataList.length}/{casetas.length})
-        </Text>
-        <View style={styles.progressBarBackground}>
-          <View style={[styles.progressBarFill, { width: `${progresoCasetas * 100}%` }]} />
-        </View>
-        <Text style={styles.progressText}>{Math.round(progresoCasetas * 100)}%</Text>
-      </View>
-
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.content}>
-        {!selectedCaseta ? (
-          <ScrollView contentContainerStyle={{ padding: 16 }}>
-            <Text style={styles.instructionText}>Selecciona una caseta para registrar envases del {formattedDate}</Text>
-            {casetas.map((caseta) => {
-              const hasData = envaseDataList.some((d) => d.caseta === caseta)
-              return (
-                <TouchableOpacity
-                  key={caseta}
-                  style={[styles.casetaCard, hasData && styles.casetaCardCompleted]}
-                  onPress={() => setSelectedCaseta(caseta)}
-                >
-                  <Icon name="home" size={24} color="#517aa2" />
-                  <Text style={styles.casetaText}>{caseta}</Text>
-                  {hasData && <Icon name="check-circle" size={20} color="#4ade80" />}
-                  <Icon name="chevron-right" size={20} color="#517aa2" />
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
-        ) : (
-          <ScrollView contentContainerStyle={{ padding: 16 }}>
-            <Text style={styles.formTitle}>
-              ENVASE - {selectedSeccion} / {selectedCaseta}
-            </Text>
-            <Text style={styles.formSubtitle}>Fecha: {formattedDate}</Text>
-
-            <Card>
-              <Text style={styles.cardTitle}>Registro de Envase</Text>
-
-              {/* Selector de tipo de envase */}
-              <TouchableOpacity style={styles.envaseSelector} onPress={() => setShowModalEnvase(true)}>
-                <Text style={[styles.envaseText, !formData.tipo && styles.placeholderText]}>
-                  {formData.tipo || "Seleccionar tipo de envase"}
-                </Text>
-                <Icon name="arrow-drop-down" size={24} color="#749BC2" />
-              </TouchableOpacity>
-
-              <CustomInput
-                label="Existencia Inicial"
-                value={formData.existenciaInicial}
-                onChangeText={(text) => handleChange("existenciaInicial", text)}
-              />
-
-              <CustomInput
-                label="Recibido"
-                value={formData.recibido}
-                onChangeText={(text) => handleChange("recibido", text)}
-              />
-
-              <CustomInput
-                label="Consumo"
-                value={formData.consumo}
-                onChangeText={(text) => handleChange("consumo", text)}
-              />
-
-              <View style={styles.existenciaFinalContainer}>
-                <Text style={styles.existenciaFinalLabel}>Existencia Final:</Text>
-                <Text style={styles.existenciaFinalValue}>{formData.existenciaFinal}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView horizontal style={{ backgroundColor: '#fff' }}>
+        <View>
+          <Text style={styles.title}>Envase - {seccionSeleccionada} - {fechaHoy}</Text>
+          <ScrollView style={{ maxHeight: 520 }}>
+            <View style={styles.table}>
+              <View style={styles.headerRow}>
+                <Text style={styles.headerCell}>TIPO</Text>
+                {columnas.map(col => (
+                  <Text key={col} style={styles.headerCell}>{col}</Text>
+                ))}
+                <Text style={styles.headerCell}>EXIST. FINAL</Text>
               </View>
-            </Card>
-
-            <View style={styles.buttonRow}>
-              <Button
-                title={loading ? "GUARDANDO..." : "GUARDAR"}
-                onPress={handleSave}
-                icon="save"
-                disabled={loading}
-              />
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: "#e74c3c" }, loading && styles.buttonDisabled]}
-                onPress={handleCancel}
-                disabled={loading}
-              >
-                <Icon name="close" size={20} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.buttonText}>CANCELAR</Text>
-              </TouchableOpacity>
+              {envases.map(envase => (
+                <View key={envase} style={styles.dataRow}>
+                  <Text style={styles.casetaCell}>{envase}</Text>
+                  <TextInput
+                    style={styles.inputCell}
+                    value={tabla[envase].existenciaInicial}
+                    onChangeText={v => handleChange(envase, 'existenciaInicial', v)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <TextInput
+                    style={styles.inputCell}
+                    value={tabla[envase].recibido}
+                    onChangeText={v => handleChange(envase, 'recibido', v)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <TextInput
+                    style={styles.inputCell}
+                    value={tabla[envase].consumo}
+                    onChangeText={v => handleChange(envase, 'consumo', v)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <Text style={[styles.inputCell, { backgroundColor: '#f0f0f0' }]}>
+                    {tabla[envase].existenciaFinal}
+                  </Text>
+                </View>
+              ))}
+              {/* Fila de totales */}
+              <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
+                <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.existenciaInicial}</Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.recibido}</Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.consumo}</Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.existenciaFinal}</Text>
+              </View>
             </View>
           </ScrollView>
-        )}
-      </KeyboardAvoidingView>
-
-      {/* Modal selección sección */}
-      <Modal visible={showModalSeccion} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Selecciona una sección</Text>
-            <ScrollView>
-              {secciones.map((sec) => (
-                <TouchableOpacity
-                  key={sec}
-                  onPress={() => {
-                    setSelectedSeccion(sec)
-                    setShowModalSeccion(false)
-                  }}
-                  style={[styles.modalItem, selectedSeccion === sec && styles.modalItemSelected]}
-                >
-                  <Text style={[styles.modalItemText, selectedSeccion === sec && styles.modalItemTextSelected]}>
-                    {sec}
-                  </Text>
-                  {selectedSeccion === sec && <Icon name="check" size={20} color="#749BC2" />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowModalSeccion(false)}>
-              <Text style={styles.modalCloseText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
+            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
-
-      {/* Modal selección tipo de envase */}
-      <Modal visible={showModalEnvase} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Selecciona tipo de envase</Text>
-            <ScrollView>
-              {envases.map((envase) => (
-                <TouchableOpacity
-                  key={envase}
-                  onPress={() => {
-                    handleChange("tipo", envase)
-                    setShowModalEnvase(false)
-                  }}
-                  style={[styles.modalItem, formData.tipo === envase && styles.modalItemSelected]}
-                >
-                  <Text style={[styles.modalItemText, formData.tipo === envase && styles.modalItemTextSelected]}>
-                    {envase}
-                  </Text>
-                  {formData.tipo === envase && <Icon name="check" size={20} color="#749BC2" />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowModalEnvase(false)}>
-              <Text style={styles.modalCloseText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {showDatePicker && (
-        <DateTimePicker
-          value={fecha}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-          maximumDate={new Date()}
-        />
-      )}
+      </ScrollView>
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#eaf1f9" },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: "#749BC2",
-  },
-  header: {
-    backgroundColor: "#749BC2",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 16,
-    alignItems: "center",
-  },
-  seccionSelector: { flexDirection: "row", alignItems: "center" },
-  seccionText: { color: "#fff", fontSize: 18, fontWeight: "bold", marginRight: 6 },
-  dateSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#5f85a2",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-  },
-  dateText: { color: "#fff", fontSize: 14, marginRight: 6 },
-  progressContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-    backgroundColor: "#eaf1f9",
-  },
-  progressLabel: { fontSize: 14, color: "#333", marginBottom: 4 },
-  progressBarBackground: {
-    height: 10,
-    borderRadius: 10,
-    backgroundColor: "#cbd5e1",
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: 10,
-    backgroundColor: "#749BC2",
-  },
-  progressText: { fontSize: 12, color: "#555", textAlign: "right", marginTop: 4 },
-  content: { flex: 1 },
-  instructionText: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#517aa2",
-    marginBottom: 20,
-    fontWeight: "500",
-  },
-  casetaCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    elevation: 3,
-  },
-  casetaCardCompleted: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#4ade80",
-  },
-  casetaText: { fontSize: 16, color: "#517aa2", fontWeight: "600", flex: 1, marginLeft: 12 },
-  formTitle: { fontSize: 18, textAlign: "center", fontWeight: "bold", color: "#517aa2", marginBottom: 8 },
-  formSubtitle: { fontSize: 14, textAlign: "center", color: "#64748b", marginBottom: 20 },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    elevation: 3,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 16,
-    color: "#749BC2",
-    textAlign: "center",
-  },
-  envaseSelector: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#749BC2",
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: "#fff",
-    marginBottom: 16,
-  },
-  envaseText: {
-    fontSize: 16,
-    color: "#333",
-  },
-  placeholderText: {
-    color: "#94a3b8",
-  },
-  inputContainer: { position: "relative", marginBottom: 12 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#749BC2",
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: "#fff",
-    fontSize: 16,
-  },
-  floatingLabel: {
-    position: "absolute",
-    top: -10,
-    left: 12,
-    fontSize: 12,
-    backgroundColor: "#fff",
-    paddingHorizontal: 4,
-    color: "#749BC2",
-    fontWeight: "bold",
-  },
-  existenciaFinalContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    marginTop: 8,
-  },
-  existenciaFinalLabel: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  existenciaFinalValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#749BC2",
-  },
-  buttonRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  button: {
-    backgroundColor: "#749BC2",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    elevation: 3,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "60%",
-  },
-  modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 16, textAlign: "center", color: "#517aa2" },
-  modalItem: {
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderBottomColor: "#e2e8f0",
-    borderBottomWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalItemSelected: {
-    backgroundColor: "#f1f5f9",
-  },
-  modalItemText: {
-    fontSize: 16,
-    color: "#334155",
-  },
-  modalItemTextSelected: {
-    color: "#749BC2",
-    fontWeight: "600",
-  },
-  modalCloseButton: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: "#749BC2",
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  modalCloseText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-})
+  safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
+  title: { fontSize: 18, fontWeight: 'bold', margin: 12, textAlign: 'center', color: '#333' },
+  table: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 8, margin: 8, backgroundColor: '#fff' },
+  headerRow: { flexDirection: 'row', backgroundColor: '#dbeafe', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+  headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 90, textAlign: 'center', color: '#222' },
+  dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
+  casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 110, textAlign: 'center', color: '#333' },
+  inputCell: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, width: 90, height: 32, margin: 2, textAlign: 'center', backgroundColor: '#f8fafc', fontSize: 13, color: '#222' },
+  btnGuardar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
+  btnGuardarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+});

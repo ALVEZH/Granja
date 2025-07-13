@@ -1,610 +1,196 @@
 "use client"
+import React, { useState, useMemo } from 'react';
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
+import { DatabaseQueries } from '../database/offline/queries';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
 
-import type React from "react"
-import { useState, useCallback, useMemo, useEffect } from "react"
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
-  ScrollView,
-  Modal,
-  Platform,
-  KeyboardAvoidingView,
-  Alert,
-  ActivityIndicator,
-} from "react-native"
-import Icon from "react-native-vector-icons/MaterialIcons"
-import DateTimePicker from "@react-native-community/datetimepicker"
-import { dbManager } from "../database/offline/db"
-import { DatabaseQueries } from "../database/offline/queries"
-import type { ExistenciaData } from "../database/offline/types"
-
-// Constantes
-const secciones = Array.from({ length: 10 }, (_, i) => `SECCIÓN ${i + 1}`)
-const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`)
-
-// Tipos
-type FormData = {
-  existenciaInicial: string
-  entradaAves: string
-  mortalidadAves: string
-  salidaAves: string
-  existenciaFinal: string // Calculado
-}
+const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
+const columnas = ['Existencia Inicial', 'Entrada', 'Mortalidad', 'Salida', 'Edad'];
 
 export default function ExistenciaScreen() {
-  // Estado principal
-  const [formData, setFormData] = useState<FormData>({
-    existenciaInicial: "",
-    entradaAves: "",
-    mortalidadAves: "",
-    salidaAves: "",
-    existenciaFinal: "",
-  })
+  const route = useRoute();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const seccionSeleccionada = (route as any).params?.seccionSeleccionada;
+  // Elimina el estado de fecha y usa siempre la fecha actual en el render
+  // const [fecha, setFecha] = useState(() => {
+  //   const today = new Date();
+  //   return today.toISOString().split('T')[0];
+  // });
+  const fechaHoy = new Date().toISOString().split('T')[0];
 
-  const [fecha, setFecha] = useState(new Date())
-  const [showDatePicker, setShowDatePicker] = useState(false)
-  const [selectedSeccion, setSelectedSeccion] = useState<string>(secciones[0])
-  const [selectedCaseta, setSelectedCaseta] = useState<string | null>(null)
-  const [showModalSeccion, setShowModalSeccion] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [isDbReady, setIsDbReady] = useState(false)
-  const [existenciaDataList, setExistenciaDataList] = useState<ExistenciaData[]>([])
+  // Estructura: { [caseta]: { existenciaInicial, entrada, mortalidad, salida, edad, existenciaFinal } }
+  const [tabla, setTabla] = useState(() => {
+    const obj: any = {};
+    casetas.forEach(caseta => {
+      obj[caseta] = { 
+        existenciaInicial: '', 
+        entrada: '', 
+        mortalidad: '', 
+        salida: '', 
+        edad: '',
+        existenciaFinal: '0'
+      };
+    });
+    return obj;
+  });
 
-  const formattedDate = useMemo(
-    () => fecha.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }),
-    [fecha],
-  )
+  // Calcular totales y existencia final
+  const totales = useMemo(() => {
+    let existenciaInicial = 0, entrada = 0, mortalidad = 0, salida = 0, existenciaFinal = 0;
+    
+    casetas.forEach(caseta => {
+      const inicial = Number(tabla[caseta].existenciaInicial) || 0;
+      const ent = Number(tabla[caseta].entrada) || 0;
+      const mort = Number(tabla[caseta].mortalidad) || 0;
+      const sal = Number(tabla[caseta].salida) || 0;
+      const final = inicial + ent - mort - sal;
+      
+      existenciaInicial += inicial;
+      entrada += ent;
+      mortalidad += mort;
+      salida += sal;
+      existenciaFinal += final;
+    });
+    
+    return { existenciaInicial, entrada, mortalidad, salida, existenciaFinal };
+  }, [tabla]);
 
-  const formattedDateForDB = useMemo(() => fecha.toISOString().split("T")[0], [fecha])
-
-  // Inicializar base de datos
-  useEffect(() => {
-    const initDB = async () => {
-      try {
-        await dbManager.init()
-        setIsDbReady(true)
-      } catch (error) {
-        console.error("Error al inicializar DB:", error)
-        Alert.alert("Error", "No se pudo inicializar la base de datos")
-      }
-    }
-    initDB()
-  }, [])
-
-  // Cargar datos cuando cambia la fecha
-  useEffect(() => {
-    if (isDbReady) {
-      loadDataByFecha()
-    }
-  }, [fecha, isDbReady])
-
-  // Cargar datos existentes cuando se selecciona una caseta
-  useEffect(() => {
-    if (selectedCaseta && isDbReady) {
-      loadExistingData()
-    }
-  }, [selectedCaseta, existenciaDataList])
-
-  const loadDataByFecha = async () => {
-    try {
-      const data = await DatabaseQueries.getExistenciaByFecha(formattedDateForDB)
-      setExistenciaDataList(data)
-    } catch (error) {
-      console.error("Error al cargar datos:", error)
-    }
-  }
-
-  const loadExistingData = () => {
-    if (!selectedCaseta) return
-
-    const casetaData = existenciaDataList.find((d) => d.caseta === selectedCaseta)
-
-    if (casetaData) {
-      setFormData({
-        existenciaInicial: casetaData.inicial.toString(),
-        entradaAves: casetaData.entrada.toString(),
-        mortalidadAves: casetaData.mortalidad.toString(),
-        salidaAves: casetaData.salida.toString(),
-        existenciaFinal: casetaData.final.toString(),
-      })
-    } else {
-      resetForm()
-    }
-  }
-
-  const resetForm = () => {
-    setFormData({
-      existenciaInicial: "",
-      entradaAves: "",
-      mortalidadAves: "",
-      salidaAves: "",
-      existenciaFinal: "",
-    })
-  }
-
-  const handleDateChange = useCallback((_: any, date?: Date) => {
-    setShowDatePicker(false)
-    if (date) setFecha(date)
-  }, [])
-
-  // Actualiza los campos y calcula existencia final
-  const handleChange = useCallback((campo: keyof Omit<FormData, "existenciaFinal">, valor: string) => {
-    setFormData((prev) => {
-      const nuevoRegistro = {
+  // Manejar cambios en la tabla
+  const handleChange = (caseta: string, campo: string, valor: string) => {
+    setTabla((prev: any) => {
+      const newTabla = {
         ...prev,
-        [campo]: valor,
-      }
+        [caseta]: {
+          ...prev[caseta],
+          [campo]: campo === 'edad' ? valor.replace(/[^0-9]/g, '') : valor.replace(/[^0-9]/g, '')
+        }
+      };
 
-      // Calcular existencia final
-      const inicial = Number(nuevoRegistro.existenciaInicial) || 0
-      const entrada = Number(nuevoRegistro.entradaAves) || 0
-      const mortalidad = Number(nuevoRegistro.mortalidadAves) || 0
-      const salida = Number(nuevoRegistro.salidaAves) || 0
+      // Calcular existencia final para esta caseta
+      const inicial = Number(newTabla[caseta].existenciaInicial) || 0;
+      const entrada = Number(newTabla[caseta].entrada) || 0;
+      const mortalidad = Number(newTabla[caseta].mortalidad) || 0;
+      const salida = Number(newTabla[caseta].salida) || 0;
+      newTabla[caseta].existenciaFinal = String(inicial + entrada - mortalidad - salida);
 
-      nuevoRegistro.existenciaFinal = String(inicial + entrada - mortalidad - salida)
+      return newTabla;
+    });
+  };
 
-      return nuevoRegistro
-    })
-  }, [])
-
-  const handleSave = async () => {
-    if (!selectedCaseta || !isDbReady) {
-      Alert.alert("Error", "Selecciona una caseta primero")
-      return
-    }
-
-    setLoading(true)
+  // Guardar datos en la base de datos
+  const handleGuardar = async () => {
     try {
-      const existenciaData: ExistenciaData = {
-        caseta: selectedCaseta,
-        fecha: formattedDateForDB,
-        inicial: Number.parseInt(formData.existenciaInicial) || 0,
-        entrada: Number.parseInt(formData.entradaAves) || 0,
-        mortalidad: Number.parseInt(formData.mortalidadAves) || 0,
-        salida: Number.parseInt(formData.salidaAves) || 0,
-        final: Number.parseInt(formData.existenciaFinal) || 0,
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      for (const caseta of casetas) {
+        const data: any = {
+          caseta,
+          fecha: fechaHoy,
+          inicial: Number(tabla[caseta].existenciaInicial) || 0,
+          entrada: Number(tabla[caseta].entrada) || 0,
+          mortalidad: Number(tabla[caseta].mortalidad) || 0,
+          salida: Number(tabla[caseta].salida) || 0,
+          edad: Number(tabla[caseta].edad) || 0,
+          final: Number(tabla[caseta].existenciaFinal) || 0,
+        };
+        await DatabaseQueries.insertExistencia(data);
       }
-
-      await DatabaseQueries.insertExistencia(existenciaData)
-
-      Alert.alert("Éxito", `Datos de existencia guardados para ${selectedCaseta} - ${formattedDate}`, [
-        {
-          text: "OK",
-          onPress: () => {
-            setSelectedCaseta(null)
-            resetForm()
-            loadDataByFecha() // Recargar datos
-          },
-        },
-      ])
+      Alert.alert('Éxito', 'Datos de existencia guardados correctamente.');
+      navigation.replace('Envase', { seccionSeleccionada } as any);
     } catch (error) {
-      console.error("Error al guardar:", error)
-      Alert.alert("Error", "No se pudieron guardar los datos")
-    } finally {
-      setLoading(false)
+      console.error('Error al guardar:', error);
+      Alert.alert('Error', 'No se pudieron guardar los datos.');
     }
-  }
-
-  const handleCancel = () => {
-    Alert.alert("Cancelar", "¿Estás seguro de que quieres cancelar? Se perderán los cambios no guardados.", [
-      { text: "No", style: "cancel" },
-      {
-        text: "Sí",
-        onPress: () => {
-          setSelectedCaseta(null)
-          resetForm()
-        },
-      },
-    ])
-  }
-
-  const progresoCasetas = useMemo(() => {
-    const completadas = existenciaDataList.length
-    const total = casetas.length
-    return completadas / total
-  }, [existenciaDataList])
-
-  // Reutilizable input con label flotante
-  const CustomInput = ({
-    label,
-    value,
-    onChangeText,
-    editable = true,
-  }: {
-    label: string
-    value: string
-    onChangeText: (text: string) => void
-    editable?: boolean
-  }) => (
-    <View style={styles.inputContainer}>
-      <TextInput
-        style={[styles.input, !editable && styles.inputDisabled]}
-        keyboardType="number-pad"
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={label}
-        placeholderTextColor="#94a3b8"
-        editable={editable}
-      />
-      {value ? <Text style={styles.floatingLabel}>{label}</Text> : null}
-    </View>
-  )
-
-  // Card para contener inputs
-  const Card = ({ children }: { children: React.ReactNode }) => <View style={styles.card}>{children}</View>
-
-  if (!isDbReady) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#749BC2" />
-          <Text style={styles.loadingText}>Inicializando base de datos...</Text>
-        </View>
-      </SafeAreaView>
-    )
-  }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.seccionSelector} onPress={() => setShowModalSeccion(true)}>
-          <Text style={styles.seccionText}>{selectedSeccion}</Text>
-          <Icon name="arrow-drop-down" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateSelector}>
-          <Text style={styles.dateText}>{formattedDate}</Text>
-          <Icon name="event" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Progreso */}
-      <View style={styles.progressContainer}>
-        <Text style={styles.progressLabel}>
-          Progreso de Casetas ({existenciaDataList.length}/{casetas.length})
-        </Text>
-        <View style={styles.progressBarBackground}>
-          <View style={[styles.progressBarFill, { width: `${progresoCasetas * 100}%` }]} />
-        </View>
-        <Text style={styles.progressText}>{Math.round(progresoCasetas * 100)}%</Text>
-      </View>
-
-      {/* Contenido */}
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.content}>
-        {!selectedCaseta ? (
-          <ScrollView contentContainerStyle={styles.casetaListContainer}>
-            <Text style={styles.instructionText}>
-              Selecciona una caseta para registrar existencia del {formattedDate}
-            </Text>
-            {casetas.map((caseta) => {
-              const hasData = existenciaDataList.some((d) => d.caseta === caseta)
-              return (
-                <TouchableOpacity
-                  key={caseta}
-                  style={[styles.casetaCard, hasData && styles.casetaCardCompleted]}
-                  onPress={() => setSelectedCaseta(caseta)}
-                >
-                  <Icon name="home" size={24} color="#749BC2" style={{ marginRight: 8 }} />
-                  <Text style={styles.casetaText}>{caseta}</Text>
-                  {hasData && <Icon name="check-circle" size={20} color="#4ade80" />}
-                  <Icon name="chevron-right" size={20} color="#749BC2" />
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
-        ) : (
-          <ScrollView style={styles.formContainer}>
-            <Text style={styles.formTitle}>
-              REGISTRO DE EXISTENCIA - {selectedSeccion} - {selectedCaseta}
-            </Text>
-            <Text style={styles.formSubtitle}>Fecha: {formattedDate}</Text>
-
-            <Card>
-              <CustomInput
-                label="Existencia Inicial"
-                value={formData.existenciaInicial}
-                onChangeText={(text) => handleChange("existenciaInicial", text)}
-              />
-              <CustomInput
-                label="Entrada Aves"
-                value={formData.entradaAves}
-                onChangeText={(text) => handleChange("entradaAves", text)}
-              />
-              <CustomInput
-                label="Mortalidad Aves"
-                value={formData.mortalidadAves}
-                onChangeText={(text) => handleChange("mortalidadAves", text)}
-              />
-              <CustomInput
-                label="Salida Aves"
-                value={formData.salidaAves}
-                onChangeText={(text) => handleChange("salidaAves", text)}
-              />
-              <View style={styles.existenciaFinalContainer}>
-                <Text style={styles.existenciaFinalLabel}>Existencia Final:</Text>
-                <Text style={styles.existenciaFinalValue}>{formData.existenciaFinal}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView horizontal style={{ backgroundColor: '#fff' }}>
+        <View>
+          <Text style={styles.title}>Existencia - {seccionSeleccionada} - {fechaHoy}</Text>
+          <ScrollView style={{ maxHeight: 520 }}>
+            <View style={styles.table}>
+              <View style={styles.headerRow}>
+                <Text style={styles.headerCell}>CASETA</Text>
+                {columnas.map(col => (
+                  <Text key={col} style={styles.headerCell}>{col}</Text>
+                ))}
+                <Text style={styles.headerCell}>EXIST. FINAL</Text>
               </View>
-            </Card>
-
-            {/* Botones */}
-            <View style={styles.actionsContainer}>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: "#749BC2" }, loading && styles.buttonDisabled]}
-                onPress={handleSave}
-                disabled={loading}
-              >
-                <Icon name="save" size={20} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.buttonText}>{loading ? "GUARDANDO..." : "GUARDAR"}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: "#e74c3c" }, loading && styles.buttonDisabled]}
-                onPress={handleCancel}
-                disabled={loading}
-              >
-                <Icon name="close" size={20} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.buttonText}>CANCELAR</Text>
-              </TouchableOpacity>
+              {casetas.map(caseta => (
+                <View key={caseta} style={styles.dataRow}>
+                  <Text style={styles.casetaCell}>{caseta}</Text>
+                  <TextInput
+                    style={styles.inputCell}
+                    value={tabla[caseta].existenciaInicial}
+                    onChangeText={v => handleChange(caseta, 'existenciaInicial', v)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <TextInput
+                    style={styles.inputCell}
+                    value={tabla[caseta].entrada}
+                    onChangeText={v => handleChange(caseta, 'entrada', v)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <TextInput
+                    style={styles.inputCell}
+                    value={tabla[caseta].mortalidad}
+                    onChangeText={v => handleChange(caseta, 'mortalidad', v)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <TextInput
+                    style={styles.inputCell}
+                    value={tabla[caseta].salida}
+                    onChangeText={v => handleChange(caseta, 'salida', v)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <TextInput
+                    style={styles.inputCell}
+                    value={tabla[caseta].edad}
+                    onChangeText={v => handleChange(caseta, 'edad', v)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <Text style={[styles.inputCell, { backgroundColor: '#f0f0f0' }]}>
+                    {tabla[caseta].existenciaFinal}
+                  </Text>
+                </View>
+              ))}
+              {/* Fila de totales */}
+              <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
+                <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.existenciaInicial}</Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.entrada}</Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.mortalidad}</Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.salida}</Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}></Text>
+                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.existenciaFinal}</Text>
+              </View>
             </View>
           </ScrollView>
-        )}
-      </KeyboardAvoidingView>
-
-      {/* Modal para selección de sección */}
-      <Modal
-        visible={showModalSeccion}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowModalSeccion(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Seleccionar Sección</Text>
-            <ScrollView>
-              {secciones.map((seccion) => (
-                <TouchableOpacity
-                  key={seccion}
-                  style={[styles.modalSectionItem, selectedSeccion === seccion && styles.modalSectionItemSelected]}
-                  onPress={() => {
-                    setSelectedSeccion(seccion)
-                    setShowModalSeccion(false)
-                    setSelectedCaseta(null) // Resetea caseta al cambiar sección
-                  }}
-                >
-                  <Text
-                    style={[styles.modalSectionText, selectedSeccion === seccion && styles.modalSectionTextSelected]}
-                  >
-                    {seccion}
-                  </Text>
-                  {selectedSeccion === seccion && <Icon name="check" size={20} color="#749BC2" />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowModalSeccion(false)}>
-              <Text style={styles.modalCloseText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
+            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
-
-      {showDatePicker && <DateTimePicker value={fecha} mode="date" display="default" onChange={handleDateChange} />}
+      </ScrollView>
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#eaf1f9" },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: "#749BC2",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#749BC2",
-  },
-  seccionSelector: { flexDirection: "row", alignItems: "center" },
-  seccionText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginRight: 8,
-  },
-  dateSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#5f85a2",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-  },
-  dateText: { color: "#fff", fontSize: 14, marginRight: 6 },
-  progressContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-    backgroundColor: "#eaf1f9",
-  },
-  progressLabel: { fontSize: 14, color: "#333", marginBottom: 4 },
-  progressBarBackground: {
-    height: 10,
-    borderRadius: 10,
-    backgroundColor: "#cbd5e1",
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: 10,
-    backgroundColor: "#749BC2",
-  },
-  progressText: { fontSize: 12, color: "#555", textAlign: "right", marginTop: 4 },
-  content: { flex: 1 },
-  instructionText: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#517aa2",
-    marginBottom: 20,
-    fontWeight: "500",
-  },
-  // Lista casetas
-  casetaListContainer: { padding: 16 },
-  casetaCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    elevation: 3,
-  },
-  casetaCardCompleted: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#4ade80",
-  },
-  casetaText: { fontSize: 16, fontWeight: "600", color: "#749BC2", flex: 1, marginLeft: 8 },
-  // Formulario
-  formContainer: { flex: 1, padding: 16 },
-  formTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
-    color: "#749BC2",
-    textAlign: "center",
-  },
-  formSubtitle: { fontSize: 14, textAlign: "center", color: "#64748b", marginBottom: 20 },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    elevation: 4,
-  },
-  inputContainer: { position: "relative", marginBottom: 16 },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: "#749BC2",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "#fff",
-    color: "#333",
-    fontSize: 16,
-  },
-  inputDisabled: {
-    backgroundColor: "#f8f9fa",
-    color: "#6c757d",
-  },
-  floatingLabel: {
-    position: "absolute",
-    top: -10,
-    left: 12,
-    fontSize: 12,
-    backgroundColor: "#fff",
-    paddingHorizontal: 4,
-    color: "#749BC2",
-    fontWeight: "bold",
-  },
-  existenciaFinalContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    marginTop: 8,
-  },
-  existenciaFinalLabel: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  existenciaFinalValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#749BC2",
-  },
-  actionsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  button: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    marginVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    elevation: 3,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-    textAlign: "center",
-  },
-  // Modal
-  modalContainer: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: "60%",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 16,
-    textAlign: "center",
-    color: "#517aa2",
-  },
-  modalSectionItem: {
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalSectionItemSelected: {
-    backgroundColor: "#f1f5f9",
-  },
-  modalSectionText: {
-    fontSize: 16,
-    color: "#334155",
-  },
-  modalSectionTextSelected: {
-    color: "#749BC2",
-    fontWeight: "600",
-  },
-  modalCloseButton: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: "#749BC2",
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  modalCloseText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-})
+  safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
+  title: { fontSize: 18, fontWeight: 'bold', margin: 12, textAlign: 'center', color: '#333' },
+  table: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 8, margin: 8, backgroundColor: '#fff' },
+  headerRow: { flexDirection: 'row', backgroundColor: '#dbeafe', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+  headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 90, textAlign: 'center', color: '#222' },
+  dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
+  casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 70, textAlign: 'center', color: '#333' },
+  inputCell: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, width: 90, height: 32, margin: 2, textAlign: 'center', backgroundColor: '#f8fafc', fontSize: 13, color: '#222' },
+  btnGuardar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
+  btnGuardarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+});
