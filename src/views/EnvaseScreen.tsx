@@ -1,10 +1,11 @@
 "use client"
 import React, { useState, useMemo, createContext, useContext } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation } from 'react-native';
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation, KeyboardAvoidingView } from 'react-native';
 import { DatabaseQueries } from '../database/offline/queries';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 // CONTEXTO GLOBAL DE SECCIÓN
 
@@ -132,7 +133,7 @@ export default function EnvaseScreen() {
         }
       }
       Alert.alert('Éxito', 'Datos de envase guardados correctamente.');
-      navigation.replace('ResumenSeccion');
+      navigation.replace('Menu');
     } catch (error) {
       console.error('Error al guardar:', error);
       Alert.alert('Error', 'No se pudieron guardar los datos.');
@@ -155,103 +156,154 @@ export default function EnvaseScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={{ backgroundColor: '#fff' }} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.headerContainer}>
-          <View style={styles.headerRow}>
+      <View style={styles.headerRow}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.replace('Menu')}
+        >
+          <Ionicons name="arrow-back" size={28} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>ENVASE</Text>
+        <View style={{ width: 40 }} />
+      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboard}
+      >
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.headerContainer}>
             <Image
               source={require('../../assets/Iconos/envase.png')}
               style={styles.headerImage}
               resizeMode="contain"
             />
-            <Text style={styles.headerTitle}>ENVASE</Text>
+            <Text style={styles.subtitle}>{seccionSeleccionada} - {fechaHoy}</Text>
           </View>
-          <Text style={styles.subtitle}>{seccionSeleccionada} - {fechaHoy}</Text>
-        </View>
-        {envases.map((envase, idx) => (
-          <View key={envase} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
-            <TouchableOpacity onPress={() => toggleEnvase(envase)} style={styles.casetaHeader} activeOpacity={0.7}>
-              <Text style={styles.casetaTitle}>{envase}</Text>
-              <Text style={styles.caret}>{envasesAbiertos[envase] ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
-            {envasesAbiertos[envase] && (
-              <View style={styles.casetaContent}>
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Existencia Inicial</Text>
-                  <TextInput
-                    style={styles.inputCell}
-                    value={tabla[envase].existenciaInicial}
-                    onChangeText={v => handleChange(envase, 'existenciaInicial', v)}
-                    keyboardType="numeric"
-                    placeholder="0"
-                  />
+          {envases.map((envase, idx) => (
+            <View key={envase} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
+              <TouchableOpacity onPress={() => toggleEnvase(envase)} style={styles.casetaHeader} activeOpacity={0.7}>
+                <Text style={styles.casetaTitle}>{envase}</Text>
+                <Text style={styles.caret}>{envasesAbiertos[envase] ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+              {envasesAbiertos[envase] && (
+                <View style={styles.casetaContent}>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Existencia Inicial</Text>
+                    <TextInput
+                      style={styles.inputCell}
+                      value={tabla[envase].existenciaInicial}
+                      onChangeText={v => handleChange(envase, 'existenciaInicial', v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </View>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Recibido</Text>
+                    <TextInput
+                      style={styles.inputCell}
+                      value={tabla[envase].recibido}
+                      onChangeText={v => handleChange(envase, 'recibido', v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </View>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Consumo</Text>
+                    <TextInput
+                      style={styles.inputCell}
+                      value={tabla[envase].consumo}
+                      onChangeText={v => handleChange(envase, 'consumo', v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </View>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Existencia Final</Text>
+                    <TextInput
+                      style={styles.inputCell}
+                      value={tabla[envase].existenciaFinal}
+                      onChangeText={v => handleChange(envase, 'existenciaFinal', v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </View>
                 </View>
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Recibido</Text>
-                  <TextInput
-                    style={styles.inputCell}
-                    value={tabla[envase].recibido}
-                    onChangeText={v => handleChange(envase, 'recibido', v)}
-                    keyboardType="numeric"
-                    placeholder="0"
-                  />
-                </View>
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Consumo</Text>
-                  <TextInput
-                    style={styles.inputCell}
-                    value={tabla[envase].consumo}
-                    onChangeText={v => handleChange(envase, 'consumo', v)}
-                    keyboardType="numeric"
-                    placeholder="0"
-                  />
-                </View>
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Existencia Final</Text>
-                  <TextInput
-                    style={styles.inputCell}
-                    value={tabla[envase].existenciaFinal}
-                    onChangeText={v => handleChange(envase, 'existenciaFinal', v)}
-                    keyboardType="numeric"
-                    placeholder="0"
-                  />
-                </View>
-              </View>
-            )}
+              )}
+            </View>
+          ))}
+          {/* Totales generales */}
+          <View style={styles.totalesBlock}>
+            <Text style={styles.totalesTitle}>Totales</Text>
+            <View style={styles.totalesRow}>
+              <Text style={styles.totalesCell}>Existencia Inicial: {totales.existenciaInicial}</Text>
+              <Text style={styles.totalesCell}>Recibido: {totales.recibido}</Text>
+              <Text style={styles.totalesCell}>Consumo: {totales.consumo}</Text>
+              <Text style={styles.totalesCell}>Existencia Final: {totales.existenciaFinal}</Text>
+            </View>
           </View>
-        ))}
-        {/* Totales generales */}
-        <View style={styles.totalesBlock}>
-          <Text style={styles.totalesTitle}>Totales</Text>
-          <View style={styles.totalesRow}>
-            <Text style={styles.totalesCell}>Existencia Inicial: {totales.existenciaInicial}</Text>
-            <Text style={styles.totalesCell}>Recibido: {totales.recibido}</Text>
-            <Text style={styles.totalesCell}>Consumo: {totales.consumo}</Text>
-            <Text style={styles.totalesCell}>Existencia Final: {totales.existenciaFinal}</Text>
-          </View>
-        </View>
-        <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
-          <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
+            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
+  keyboard: { flex: 1 },
+  scroll: { flexGrow: 1, padding: 24 },
   title: { fontSize: 18, fontWeight: 'bold', margin: 12, textAlign: 'center', color: '#333' },
   table: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 8, margin: 8, backgroundColor: '#fff' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10, width: '100%', paddingLeft: 0, paddingRight: 42 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  backButton: {
+    padding: 6,
+    width: 40,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#2a3a4b',
+    textAlign: 'center',
+    flex: 1,
+    letterSpacing: 1,
+  },
   headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 90, textAlign: 'center', color: '#222' },
   dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
   casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 110, textAlign: 'center', color: '#333' },
-  inputCell: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, width: 90, height: 32, margin: 2, textAlign: 'center', backgroundColor: '#f8fafc', fontSize: 13, color: '#222' },
+  inputCell: {
+    borderWidth: 1.5,
+    borderColor: '#b0b8c1',
+    borderRadius: 8,
+    width: 110,
+    height: 40,
+    margin: 4,
+    paddingHorizontal: 12,
+    textAlign: 'center',
+    backgroundColor: '#fff',
+    fontSize: 16,
+    color: '#222',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
   btnGuardar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
   btnGuardarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   scrollContent: { paddingBottom: 30 },
   headerContainer: { alignItems: 'center', marginTop: 30, marginBottom: 10 },
   headerImage: { width: 48, height: 48, marginRight: 10 },
-  headerTitle: { fontSize: 26, fontWeight: 'bold', color: '#2a3a4b', textAlign: 'center', letterSpacing: 1 },
   subtitle: { fontSize: 15, color: '#333', marginBottom: 10, textAlign: 'center' },
   casetaBlock: { borderRadius: 10, margin: 10, padding: 0, elevation: 2, overflow: 'hidden' },
   casetaBlockEven: { backgroundColor: '#f4f8fd' },

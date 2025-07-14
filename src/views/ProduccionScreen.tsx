@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation } from 'react-native';
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation, KeyboardAvoidingView } from 'react-native';
 import { DatabaseQueries } from '../database/offline/queries';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useSeccion } from './EnvaseScreen';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const tiposHuevo = [
   'BLANCO', 'ROTO 1', 'ROTO 2', 'MANCHADO', 'FRAGIL 1', 'FRAGIL 2', 'YEMA', 'B1', 'EXTRA 240PZS'
@@ -116,7 +117,7 @@ export default function ProduccionScreen() {
         await DatabaseQueries.insertProduccion(data);
       }
       Alert.alert('Éxito', 'Datos de producción guardados correctamente.');
-      navigation.replace('Alimento');
+      navigation.replace('Menu');
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar los datos.');
     }
@@ -124,84 +125,118 @@ export default function ProduccionScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={{ backgroundColor: '#fff' }} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.headerContainer}>
-          <View style={styles.headerRow}>
+      <View style={styles.headerRow}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.replace('Menu')}
+        >
+          <Ionicons name="arrow-back" size={28} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>PRODUCCIÓN</Text>
+        <View style={{ width: 40 }} />
+      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboard}
+      >
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.headerContainer}>
             <Image
               source={require('../../assets/Iconos/produccion.png')}
               style={styles.headerImage}
               resizeMode="contain"
             />
-            <Text style={styles.headerTitle}>PRODUCCIÓN</Text>
+            <Text style={styles.subtitle}>{seccionSeleccionada} - {fechaHoy}</Text>
           </View>
-          <Text style={styles.subtitle}>{seccionSeleccionada} - {fechaHoy}</Text>
-        </View>
-        {casetas.map((caseta, idx) => (
-          <View key={caseta} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
-            <TouchableOpacity onPress={() => toggleCaseta(caseta)} style={styles.casetaHeader} activeOpacity={0.7}>
-              <Text style={styles.casetaTitle}>{caseta}</Text>
-              <Text style={styles.caret}>{casetasAbiertas[caseta] ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
-            {casetasAbiertas[caseta] && (
-              <View style={styles.casetaContent}>
-                {tiposHuevo.map(tipo => (
-                  <View key={tipo} style={styles.tipoRow}>
-                    <Text style={styles.tipoLabel}>{tipo}</Text>
-                    <View style={styles.inputGroup}>
-                      <View style={styles.inputPair}>
-                        <Text style={styles.inputLabel}>Cajas</Text>
-                        <TextInput
-                          style={styles.inputCell}
-                          value={tabla[caseta][tipo].cajas}
-                          onChangeText={v => handleChange(caseta, tipo, 'cajas', v)}
-                          keyboardType="numeric"
-                          placeholder="0"
-                        />
-                      </View>
-                      <View style={styles.inputPair}>
-                        <Text style={styles.inputLabel}>Restos</Text>
-                        <TextInput
-                          style={styles.inputCell}
-                          value={tabla[caseta][tipo].restos}
-                          onChangeText={v => handleChange(caseta, tipo, 'restos', v)}
-                          keyboardType="numeric"
-                          placeholder="0"
-                        />
+          {casetas.map((caseta, idx) => (
+            <View key={caseta} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
+              <TouchableOpacity onPress={() => toggleCaseta(caseta)} style={styles.casetaHeader} activeOpacity={0.7}>
+                <Text style={styles.casetaTitle}>{caseta}</Text>
+                <Text style={styles.caret}>{casetasAbiertas[caseta] ? '\u25b2' : '\u25bc'}</Text>
+              </TouchableOpacity>
+              {casetasAbiertas[caseta] && (
+                <View style={styles.casetaContent}>
+                  {tiposHuevo.map(tipo => (
+                    <View key={tipo} style={styles.tipoRow}>
+                      <Text style={styles.tipoLabel}>{tipo}</Text>
+                      <View style={styles.inputGroup}>
+                        <View style={styles.inputPair}>
+                          <Text style={styles.inputLabel}>Cajas</Text>
+                          <TextInput
+                            style={styles.inputCell}
+                            value={tabla[caseta][tipo].cajas}
+                            onChangeText={v => handleChange(caseta, tipo, 'cajas', v)}
+                            keyboardType="numeric"
+                            placeholder="0"
+                          />
+                        </View>
+                        <View style={styles.inputPair}>
+                          <Text style={styles.inputLabel}>Restos</Text>
+                          <TextInput
+                            style={styles.inputCell}
+                            value={tabla[caseta][tipo].restos}
+                            onChangeText={v => handleChange(caseta, tipo, 'restos', v)}
+                            keyboardType="numeric"
+                            placeholder="0"
+                          />
+                        </View>
                       </View>
                     </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        ))}
-        {/* Totales generales */}
-        <View style={styles.totalesBlock}>
-          <Text style={styles.totalesTitle}>Totales por tipo</Text>
-          {tiposHuevo.map(tipo => (
-            <View key={tipo} style={styles.totalesRow}>
-              <Text style={styles.tipoLabel}>{tipo}</Text>
-              <Text style={styles.totalesCell}>Cajas: {totales[tipo].cajas}</Text>
-              <Text style={styles.totalesCell}>Restos: {totales[tipo].restos}</Text>
+                  ))}
+                </View>
+              )}
             </View>
           ))}
-        </View>
-        <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
-          <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          {/* Totales generales */}
+          <View style={styles.totalesBlock}>
+            <Text style={styles.totalesTitle}>Totales por tipo</Text>
+            {tiposHuevo.map(tipo => (
+              <View key={tipo} style={styles.totalesRow}>
+                <Text style={styles.tipoLabel}>{tipo}</Text>
+                <Text style={styles.totalesCell}>Cajas: {totales[tipo].cajas}</Text>
+                <Text style={styles.totalesCell}>Restos: {totales[tipo].restos}</Text>
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
+            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  backButton: {
+    padding: 6,
+    width: 40,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#2a3a4b',
+    textAlign: 'center',
+    flex: 1,
+    letterSpacing: 1,
+  },
+  keyboard: { flex: 1 },
+  scroll: { flexGrow: 1, padding: 24 },
   scrollContent: { paddingBottom: 30 },
   headerContainer: { alignItems: 'center', marginTop: 30, marginBottom: 10 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10, width: '100%', paddingLeft: 0, paddingRight: 42 },
   headerImage: { width: 48, height: 48, marginRight: 10 },
   headerTextAbsoluteWrapper: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  headerTitle: { fontSize: 26, fontWeight: 'bold', color: '#2a3a4b', textAlign: 'center', letterSpacing: 1 },
   subtitle: { fontSize: 15, color: '#333', marginBottom: 10, textAlign: 'center' },
   casetaBlock: { borderRadius: 10, margin: 10, padding: 0, elevation: 2, overflow: 'hidden' },
   casetaBlockEven: { backgroundColor: '#f4f8fd' },
@@ -215,7 +250,24 @@ const styles = StyleSheet.create({
   inputGroup: { flexDirection: 'row', gap: 10 },
   inputPair: { flexDirection: 'column', alignItems: 'center', marginRight: 10 },
   inputLabel: { fontSize: 11, color: '#666', marginBottom: 2 },
-  inputCell: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, width: 60, height: 32, textAlign: 'center', backgroundColor: '#f8fafc', fontSize: 13, color: '#222', marginBottom: 2 },
+  inputCell: {
+    borderWidth: 1.5,
+    borderColor: '#b0b8c1',
+    borderRadius: 8,
+    width: 60,
+    height: 40,
+    margin: 4,
+    paddingHorizontal: 12,
+    textAlign: 'center',
+    backgroundColor: '#fff',
+    fontSize: 16,
+    color: '#222',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
   totalesBlock: { margin: 16, padding: 10, backgroundColor: '#dbeafe', borderRadius: 8 },
   totalesTitle: { fontWeight: 'bold', fontSize: 15, marginBottom: 6, color: '#2a3a4b' },
   totalesRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },

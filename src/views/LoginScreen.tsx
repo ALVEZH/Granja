@@ -60,7 +60,7 @@ export default function LoginScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             <Text style={styles.title}>Bienvenido</Text>
-            <Text style={styles.subtitle}>Inicia sesión para acceder a tu cuenta</Text>
+            <Text style={styles.subtitle}>Inicia sesión para acceder</Text>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Correo electrónico</Text>

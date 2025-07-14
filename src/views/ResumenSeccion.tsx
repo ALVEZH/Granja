@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, TextInput, Image } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { DatabaseQueries } from '../database/offline/queries';
 import * as Print from 'expo-print';
 import { useSeccion } from './EnvaseScreen';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
 
 const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
 const columnasProduccion = [
@@ -18,6 +21,7 @@ export default function ResumenSeccion() {
   // const route = useRoute();
   // const navigation = useNavigation();
   const { seccionSeleccionada } = useSeccion();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [fecha, setFecha] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0];
@@ -185,8 +189,20 @@ export default function ResumenSeccion() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.headerSafeArea}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.replace('Menu')}
+          >
+            <Ionicons name="arrow-back" size={28} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={2} ellipsizeMode="tail">Resumen de la sección {seccionSeleccionada}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <Text style={styles.headerFecha}>{fecha}</Text>
+      </SafeAreaView>
       <ScrollView>
-        <Text style={styles.title}>Resumen de la sección {seccionSeleccionada} - {fecha}</Text>
         {/* Producción */}
         <Text style={styles.sectionTitle}>Producción</Text>
         <ScrollView horizontal>
@@ -200,16 +216,16 @@ export default function ResumenSeccion() {
                 <Text key={col + 'r'} style={styles.headerCell}>{col} Restos</Text>
               ))}
             </View>
-            {casetas.map(caseta => {
+            {casetas.map((caseta, idx) => {
               const row = produccion.find((r: any) => r.caseta === caseta) || {};
               return (
-                <View key={caseta} style={styles.dataRow}>
+                <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt]}>
                   <Text style={styles.casetaCell}>{caseta}</Text>
                   {columnasProduccion.map(col => (
-                    <Text key={col} style={styles.inputCell}>{row[`${col.toLowerCase()}_cajas`] || ''}</Text>
+                    <Text key={col} style={styles.inputCell}>{row[`${col.toLowerCase()}_cajas`] ?? ' '}</Text>
                   ))}
                   {columnasProduccion.map(col => (
-                    <Text key={col + 'r'} style={styles.inputCell}>{row[`${col.toLowerCase()}_restos`] || ''}</Text>
+                    <Text key={col + 'r'} style={styles.inputCell}>{row[`${col.toLowerCase()}_restos`] ?? ' '}</Text>
                   ))}
                 </View>
               );
@@ -237,10 +253,10 @@ export default function ResumenSeccion() {
               <Text style={styles.headerCell}>CONSUMO</Text>
               <Text style={styles.headerCell}>TIPO</Text>
             </View>
-            {casetas.map(caseta => {
+            {casetas.map((caseta, idx) => {
               const row = alimento.find((r: any) => r.caseta === caseta) || {};
               return (
-                <View key={caseta} style={styles.dataRow}>
+                <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt]}>
                   <Text style={styles.casetaCell}>{caseta}</Text>
                   <Text style={styles.inputCell}>{row.existencia_inicial || ''}</Text>
                   <Text style={styles.inputCell}>{row.entrada || ''}</Text>
@@ -271,10 +287,10 @@ export default function ResumenSeccion() {
               <Text style={styles.headerCell}>EDAD</Text>
               <Text style={styles.headerCell}>EXIST. FINAL</Text>
             </View>
-            {casetas.map(caseta => {
+            {casetas.map((caseta, idx) => {
               const row = existencia.find((r: any) => r.caseta === caseta) || {};
               return (
-                <View key={caseta} style={styles.dataRow}>
+                <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt]}>
                   <Text style={styles.casetaCell}>{caseta}</Text>
                   <Text style={styles.inputCell}>{row.inicial || ''}</Text>
                   <Text style={styles.inputCell}>{row.entrada || ''}</Text>
@@ -330,6 +346,7 @@ export default function ResumenSeccion() {
         </ScrollView>
         {/* Botón exportar */}
         <TouchableOpacity style={styles.btnExportar} onPress={exportarPDF}>
+          <Image source={require('../../assets/Iconos/PDF.png')} style={styles.resumenIcon} resizeMode="contain" />
           <Text style={styles.btnExportarText}>Exportar a PDF</Text>
         </TouchableOpacity>
         {/* Inputs de firmas y nombres eliminados */}
@@ -338,17 +355,106 @@ export default function ResumenSeccion() {
   );
 }
 
+// Cambia los estilos de las tablas y celdas para mejor alineación y legibilidad
+const COL_WIDTH = 90;
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
-  title: { fontSize: 18, fontWeight: 'bold', margin: 12, textAlign: 'center', color: '#333' },
+  headerSafeArea: {
+    backgroundColor: '#eaf1f9',
+    paddingTop: 32,
+    paddingBottom: 4,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 2,
+    flexWrap: 'wrap',
+  },
+  backButton: {
+    padding: 6,
+    width: 40,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2a3a4b',
+    textAlign: 'center',
+    flex: 1,
+    letterSpacing: 1,
+    marginHorizontal: 4,
+  },
+  headerFecha: {
+    fontSize: 15,
+    color: '#517aa2',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', marginTop: 18, marginBottom: 6, color: '#517aa2', textAlign: 'left', marginLeft: 12 },
-  table: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 8, margin: 8, backgroundColor: '#fff' },
-  headerRow: { flexDirection: 'row', backgroundColor: '#dbeafe', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
-  headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 90, textAlign: 'center', color: '#222' },
-  dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
-  casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 90, textAlign: 'center', color: '#333' },
-  inputCell: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, width: 90, height: 32, margin: 2, textAlign: 'center', backgroundColor: '#f8fafc', fontSize: 13, color: '#222' },
-  btnExportar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
-  btnExportarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  table: {
+    borderWidth: 1,
+    borderColor: '#b0b0b0',
+    borderRadius: 8,
+    margin: 8,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    backgroundColor: '#e0e7ef',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomWidth: 1,
+    borderColor: '#b0b0b0',
+  },
+  headerCell: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    width: COL_WIDTH,
+    textAlign: 'center',
+    color: '#222',
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+  },
+  dataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f8fafc',
+  },
+  dataRowAlt: {
+    backgroundColor: '#eaf1f9',
+  },
+  casetaCell: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    width: COL_WIDTH,
+    textAlign: 'center',
+    color: '#333',
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  inputCell: {
+    fontSize: 13,
+    color: '#222',
+    width: COL_WIDTH,
+    textAlign: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+  },
+  btnExportar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
+  btnExportarText: { color: '#fff', fontWeight: 'bold', fontSize: 16, marginLeft: 10 },
+  resumenIcon: { width: 28, height: 28 },
   inputFirma: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 6, padding: 8, marginBottom: 6, backgroundColor: '#fff', fontSize: 13 },
 });

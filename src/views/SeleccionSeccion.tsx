@@ -16,7 +16,7 @@ export default function SeleccionSeccion() {
 
   const handleSeleccion = (seccion: string) => {
     setSeccionSeleccionada(seccion);
-    navigation.navigate('Produccion');
+    navigation.navigate('Menu');
   };
 
   return (
