@@ -1,10 +1,24 @@
 "use client"
-import React, { useState, useMemo } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
+import React, { useState, useMemo, createContext, useContext } from 'react';
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation } from 'react-native';
 import { DatabaseQueries } from '../database/offline/queries';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+
+// CONTEXTO GLOBAL DE SECCIÓN
+
+export const SeccionContext = createContext<{
+  seccionSeleccionada: string | null;
+  setSeccionSeleccionada: (s: string | null) => void;
+}>({
+  seccionSeleccionada: null,
+  setSeccionSeleccionada: () => {},
+});
+
+export function useSeccion() {
+  return useContext(SeccionContext);
+}
 
 const envases = [
   "CAJA TIPO A",
@@ -22,7 +36,14 @@ const columnas = ['Existencia Inicial', 'Recibido', 'Consumo'];
 export default function EnvaseScreen() {
   const route = useRoute();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const seccionSeleccionada = (route as any).params?.seccionSeleccionada;
+  const paramSeccion = (route as any).params?.seccionSeleccionada;
+  const { seccionSeleccionada, setSeccionSeleccionada } = useSeccion();
+
+  // Si hay parámetro, actualiza el contexto solo la primera vez
+  React.useEffect(() => {
+    if (paramSeccion) setSeccionSeleccionada(paramSeccion);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramSeccion]);
   // Elimina el estado de fecha y usa siempre la fecha actual en el render
   // const [fecha, setFecha] = useState(() => {
   //   const today = new Date();
@@ -76,45 +97,86 @@ export default function EnvaseScreen() {
 
   // Guardar datos en la base de datos
   const handleGuardar = async () => {
+    // if (!seccionSeleccionada) {
+    //   Alert.alert('Error', 'No se ha seleccionado una sección.');
+    //   return;
+    // }
+    // Validar que al menos un envase tenga algún campo lleno
+    const algunEnvaseLleno = envases.some(envase =>
+      tabla[envase].existenciaInicial || tabla[envase].recibido || tabla[envase].consumo || tabla[envase].existenciaFinal
+    );
+    if (!algunEnvaseLleno) {
+      Alert.alert('Error', 'Debes llenar al menos un envase antes de continuar.');
+      return;
+    }
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
       for (const envase of envases) {
-        const data: any = {
-          caseta: seccionSeleccionada, // Guardamos la sección como caseta para mantener consistencia
-          fecha: fechaHoy,
-          tipo: envase,
-          inicial: Number(tabla[envase].existenciaInicial) || 0,
-          recibido: Number(tabla[envase].recibido) || 0,
-          consumo: Number(tabla[envase].consumo) || 0,
-          final: Number(tabla[envase].existenciaFinal) || 0,
-        };
-        await DatabaseQueries.insertEnvase(data);
+        // Solo guarda si hay algún campo lleno
+        if (
+          tabla[envase].existenciaInicial ||
+          tabla[envase].recibido ||
+          tabla[envase].consumo ||
+          tabla[envase].existenciaFinal
+        ) {
+          const data: any = {
+            caseta: seccionSeleccionada, // Siempre usa el valor del contexto
+            fecha: fechaHoy,
+            tipo: envase,
+            inicial: Number(tabla[envase].existenciaInicial) || 0,
+            recibido: Number(tabla[envase].recibido) || 0,
+            consumo: Number(tabla[envase].consumo) || 0,
+            final: Number(tabla[envase].existenciaFinal) || 0,
+          };
+          await DatabaseQueries.insertEnvase(data);
+        }
       }
       Alert.alert('Éxito', 'Datos de envase guardados correctamente.');
-      navigation.replace('ResumenSeccion', { seccionSeleccionada } as any);
+      navigation.replace('ResumenSeccion');
     } catch (error) {
       console.error('Error al guardar:', error);
       Alert.alert('Error', 'No se pudieron guardar los datos.');
     }
   };
 
+  // Estado para controlar qué envases están abiertos
+  const [envasesAbiertos, setEnvasesAbiertos] = useState<{ [envase: string]: boolean }>(() => {
+    const obj: { [envase: string]: boolean } = {};
+    envases.forEach(e => { obj[e] = false; });
+    return obj;
+  });
+
+  const toggleEnvase = (envase: string) => {
+    if (typeof LayoutAnimation !== 'undefined') {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+    setEnvasesAbiertos(prev => ({ ...prev, [envase]: !prev[envase] }));
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView horizontal style={{ backgroundColor: '#fff' }}>
-        <View>
-          <Text style={styles.title}>Envase - {seccionSeleccionada} - {fechaHoy}</Text>
-          <ScrollView style={{ maxHeight: 520 }}>
-            <View style={styles.table}>
-              <View style={styles.headerRow}>
-                <Text style={styles.headerCell}>TIPO</Text>
-                {columnas.map(col => (
-                  <Text key={col} style={styles.headerCell}>{col}</Text>
-                ))}
-                <Text style={styles.headerCell}>EXIST. FINAL</Text>
-              </View>
-              {envases.map(envase => (
-                <View key={envase} style={styles.dataRow}>
-                  <Text style={styles.casetaCell}>{envase}</Text>
+      <ScrollView style={{ backgroundColor: '#fff' }} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.headerContainer}>
+          <View style={styles.headerRow}>
+            <Image
+              source={require('../../assets/Iconos/envase.png')}
+              style={styles.headerImage}
+              resizeMode="contain"
+            />
+            <Text style={styles.headerTitle}>ENVASE</Text>
+          </View>
+          <Text style={styles.subtitle}>{seccionSeleccionada} - {fechaHoy}</Text>
+        </View>
+        {envases.map((envase, idx) => (
+          <View key={envase} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
+            <TouchableOpacity onPress={() => toggleEnvase(envase)} style={styles.casetaHeader} activeOpacity={0.7}>
+              <Text style={styles.casetaTitle}>{envase}</Text>
+              <Text style={styles.caret}>{envasesAbiertos[envase] ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+            {envasesAbiertos[envase] && (
+              <View style={styles.casetaContent}>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Existencia Inicial</Text>
                   <TextInput
                     style={styles.inputCell}
                     value={tabla[envase].existenciaInicial}
@@ -122,6 +184,9 @@ export default function EnvaseScreen() {
                     keyboardType="numeric"
                     placeholder="0"
                   />
+                </View>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Recibido</Text>
                   <TextInput
                     style={styles.inputCell}
                     value={tabla[envase].recibido}
@@ -129,6 +194,9 @@ export default function EnvaseScreen() {
                     keyboardType="numeric"
                     placeholder="0"
                   />
+                </View>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Consumo</Text>
                   <TextInput
                     style={styles.inputCell}
                     value={tabla[envase].consumo}
@@ -136,25 +204,34 @@ export default function EnvaseScreen() {
                     keyboardType="numeric"
                     placeholder="0"
                   />
-                  <Text style={[styles.inputCell, { backgroundColor: '#f0f0f0' }]}>
-                    {tabla[envase].existenciaFinal}
-                  </Text>
                 </View>
-              ))}
-              {/* Fila de totales */}
-              <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
-                <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
-                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.existenciaInicial}</Text>
-                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.recibido}</Text>
-                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.consumo}</Text>
-                <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totales.existenciaFinal}</Text>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Existencia Final</Text>
+                  <TextInput
+                    style={styles.inputCell}
+                    value={tabla[envase].existenciaFinal}
+                    onChangeText={v => handleChange(envase, 'existenciaFinal', v)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                </View>
               </View>
-            </View>
-          </ScrollView>
-          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
-            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
-          </TouchableOpacity>
+            )}
+          </View>
+        ))}
+        {/* Totales generales */}
+        <View style={styles.totalesBlock}>
+          <Text style={styles.totalesTitle}>Totales</Text>
+          <View style={styles.totalesRow}>
+            <Text style={styles.totalesCell}>Existencia Inicial: {totales.existenciaInicial}</Text>
+            <Text style={styles.totalesCell}>Recibido: {totales.recibido}</Text>
+            <Text style={styles.totalesCell}>Consumo: {totales.consumo}</Text>
+            <Text style={styles.totalesCell}>Existencia Final: {totales.existenciaFinal}</Text>
+          </View>
         </View>
+        <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
+          <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -164,11 +241,29 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
   title: { fontSize: 18, fontWeight: 'bold', margin: 12, textAlign: 'center', color: '#333' },
   table: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 8, margin: 8, backgroundColor: '#fff' },
-  headerRow: { flexDirection: 'row', backgroundColor: '#dbeafe', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10, width: '100%', paddingLeft: 0, paddingRight: 42 },
   headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 90, textAlign: 'center', color: '#222' },
   dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
   casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 110, textAlign: 'center', color: '#333' },
   inputCell: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, width: 90, height: 32, margin: 2, textAlign: 'center', backgroundColor: '#f8fafc', fontSize: 13, color: '#222' },
   btnGuardar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
   btnGuardarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  scrollContent: { paddingBottom: 30 },
+  headerContainer: { alignItems: 'center', marginTop: 30, marginBottom: 10 },
+  headerImage: { width: 48, height: 48, marginRight: 10 },
+  headerTitle: { fontSize: 26, fontWeight: 'bold', color: '#2a3a4b', textAlign: 'center', letterSpacing: 1 },
+  subtitle: { fontSize: 15, color: '#333', marginBottom: 10, textAlign: 'center' },
+  casetaBlock: { borderRadius: 10, margin: 10, padding: 0, elevation: 2, overflow: 'hidden' },
+  casetaBlockEven: { backgroundColor: '#f4f8fd' },
+  casetaBlockOdd: { backgroundColor: '#e0e7ef' },
+  casetaHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: '#c7d7ee' },
+  casetaTitle: { fontSize: 16, fontWeight: 'bold', color: '#2a3a4b' },
+  caret: { fontSize: 18, color: '#2a3a4b', marginLeft: 8 },
+  casetaContent: { padding: 10 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  inputLabel: { width: 120, fontWeight: '600', color: '#3b3b3b', fontSize: 13 },
+  totalesBlock: { margin: 16, padding: 10, backgroundColor: '#dbeafe', borderRadius: 8 },
+  totalesTitle: { fontWeight: 'bold', fontSize: 15, marginBottom: 6, color: '#2a3a4b' },
+  totalesRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 },
+  totalesCell: { marginRight: 16, fontSize: 13, color: '#333' },
 });

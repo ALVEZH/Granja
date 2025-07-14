@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } fr
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { useSeccion } from './EnvaseScreen';
 
 const secciones = Array.from({ length: 10 }, (_, i) => `SECCIÓN ${i + 1}`);
 const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
@@ -11,16 +12,17 @@ type SeleccionSeccionNavigationProp = NativeStackNavigationProp<RootStackParamLi
 
 export default function SeleccionSeccion() {
   const navigation = useNavigation<SeleccionSeccionNavigationProp>();
+  const { setSeccionSeleccionada } = useSeccion();
 
   const handleSeleccion = (seccion: string) => {
-    // Aquí podrías guardar la sección seleccionada en un contexto/global si lo necesitas
-    navigation.navigate('Produccion', { seccionSeleccionada: seccion });
+    setSeccionSeleccionada(seccion);
+    navigation.navigate('Produccion');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Selecciona la SECCIÓN/Caseta</Text>
+        <Text style={styles.title}>Selecciona una opcion</Text>
         {secciones.map((seccion) => (
           <TouchableOpacity
             key={seccion}

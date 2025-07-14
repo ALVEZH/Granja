@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Ale
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { DatabaseQueries } from '../database/offline/queries';
 import * as Print from 'expo-print';
+import { useSeccion } from './EnvaseScreen';
 
 const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
 const columnasProduccion = [
@@ -14,9 +15,9 @@ const envases = [
 ];
 
 export default function ResumenSeccion() {
-  const route = useRoute();
-  const navigation = useNavigation();
-  const seccionSeleccionada = (route as any).params?.seccionSeleccionada;
+  // const route = useRoute();
+  // const navigation = useNavigation();
+  const { seccionSeleccionada } = useSeccion();
   const [fecha, setFecha] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0];
