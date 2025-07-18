@@ -242,7 +242,7 @@ export default function ExistenciaScreen() {
           {/* Totales generales */}
           <View style={styles.totalesBlock}>
             <Text style={styles.totalesTitle}>Totales</Text>
-            <View style={styles.totalesRow}>
+            <View style={styles.totalesColumn}>
               <Text style={styles.totalesCell}>Inicial: {totales.existenciaInicial}</Text>
               <Text style={styles.totalesCell}>Entrada: {totales.entrada}</Text>
               <Text style={styles.totalesCell}>Mortalidad: {totales.mortalidad}</Text>
@@ -326,5 +326,6 @@ const styles = StyleSheet.create({
   totalesBlock: { margin: 16, padding: 10, backgroundColor: '#dbeafe', borderRadius: 8 },
   totalesTitle: { fontWeight: 'bold', fontSize: 15, marginBottom: 6, color: '#2a3a4b' },
   totalesRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 },
-  totalesCell: { marginRight: 16, fontSize: 13, color: '#333' },
+  totalesColumn: {flexDirection: 'column'},
+  totalesCell: { marginRight: 16, fontSize: 15, color: '#333' },
 });
