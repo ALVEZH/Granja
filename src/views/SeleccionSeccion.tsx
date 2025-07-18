@@ -1,35 +1,37 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useSeccion } from './EnvaseScreen';
-
-const secciones = Array.from({ length: 10 }, (_, i) => `SECCIÓN ${i + 1}`);
-const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
+import { useGranjas, Granja } from '../hooks/useGranjas';
 
 type SeleccionSeccionNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SeleccionSeccion'>;
 
 export default function SeleccionSeccion() {
   const navigation = useNavigation<SeleccionSeccionNavigationProp>();
   const { setSeccionSeleccionada } = useSeccion();
+  const { granjas, loading: loadingGranjas, error: errorGranjas } = useGranjas();
 
-  const handleSeleccion = (seccion: string) => {
-    setSeccionSeleccionada(seccion);
+  // Al seleccionar una sección (granja), guardar el objeto completo en el contexto y navegar al menú
+  const handleSeleccion = (granja: Granja) => {
+    setSeccionSeleccionada(granja);
     navigation.navigate('Menu');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Selecciona una opcion</Text>
-        {secciones.map((seccion) => (
+        <Text style={styles.title}>Selecciona una sección</Text>
+        {loadingGranjas && <ActivityIndicator size="large" color="#749BC2" style={{ marginVertical: 20 }} />}
+        {errorGranjas && <Text style={{ color: 'red' }}>{errorGranjas}</Text>}
+        {!loadingGranjas && granjas.map((granja) => (
           <TouchableOpacity
-            key={seccion}
+            key={granja.GranjaID}
             style={styles.button}
-            onPress={() => handleSeleccion(seccion)}
+            onPress={() => handleSeleccion(granja)}
           >
-            <Text style={styles.buttonText}>{seccion}</Text>
+            <Text style={styles.buttonText}>{granja.Nombre}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>

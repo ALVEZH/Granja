@@ -7,10 +7,18 @@ import { useSeccion } from './EnvaseScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { useCasetas } from '../hooks/useCasetas';
 
-const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
 const columnasProduccion = [
-  'BLANCO', 'ROTO 1', 'ROTO 2', 'MANCHADO', 'FRAGIL 1', 'FRAGIL 2', 'YEMA', 'B1', 'EXTRA 240PZS'
+  { label: 'BLANCO', key: 'blanco' },
+  { label: 'ROTO 1', key: 'roto1' },
+  { label: 'ROTO 2', key: 'roto2' },
+  { label: 'MANCHADO', key: 'manchado' },
+  { label: 'FRAGIL 1', key: 'fragil1' },
+  { label: 'FRAGIL 2', key: 'fragil2' },
+  { label: 'YEMA', key: 'yema' },
+  { label: 'B1', key: 'b1' },
+  { label: 'EXTRA 240PZS', key: 'extra240' }
 ];
 const envases = [
   'CAJA TIPO A', 'SEPARADOR TIPO A', 'CAJA TIPO B', 'SEPARADOR TIPO B',
@@ -38,49 +46,68 @@ export default function ResumenSeccion() {
   const [nombreChofer, setNombreChofer] = useState('');
   const [firmaChofer, setFirmaChofer] = useState('');
 
+  // Obtener las casetas de la sección seleccionada (usando useCasetas si es necesario)
+  const granjaId = seccionSeleccionada?.GranjaID ?? null;
+  const { casetas } = useCasetas(granjaId);
+  const casetasFiltradas = casetas?.filter(c => c.GranjaID === granjaId) ?? [];
+
   useEffect(() => {
-    DatabaseQueries.getProduccionByFecha(fecha).then(setProduccion);
-    DatabaseQueries.getAlimentoByFecha(fecha).then(setAlimento);
-    DatabaseQueries.getExistenciaByFecha(fecha).then(setExistencia);
-    DatabaseQueries.getEnvaseByFecha(fecha).then(setEnvase);
-  }, [fecha]);
+    if (!granjaId) return;
+    DatabaseQueries.getProduccionByFecha(fecha, granjaId).then(setProduccion);
+    DatabaseQueries.getAlimentoByFecha(fecha, granjaId).then(setAlimento);
+    DatabaseQueries.getExistenciaByFecha(fecha, granjaId).then(setExistencia);
+    DatabaseQueries.getEnvaseByFecha(fecha, granjaId).then(setEnvase);
+  }, [fecha, granjaId]);
 
   // Totales para cada tabla
+  // Obtener solo los nombres de las casetas válidas de la sección seleccionada
+  const casetasValidas = casetasFiltradas.map(c => c.Nombre);
+  // Cálculo de totales solo con casetas válidas
   const totalesProduccion = useMemo(() => {
     const tot: any = {};
     columnasProduccion.forEach(col => {
-      tot[col] = { cajas: 0, restos: 0 };
+      tot[col.key] = { cajas: 0, restos: 0 };
     });
-    produccion.forEach((row: any) => {
-      columnasProduccion.forEach(col => {
-        tot[col].cajas += row[`${col.toLowerCase()}_cajas`] || 0;
-        tot[col].restos += row[`${col.toLowerCase()}_restos`] || 0;
-      });
+    casetasValidas.forEach(caseta => {
+      const row = produccion.find((r: any) => r.caseta === caseta);
+      if (row) {
+        columnasProduccion.forEach(col => {
+          tot[col.key].cajas += Number(row[`${col.key}_cajas`] || 0);
+          tot[col.key].restos += Number(row[`${col.key}_restos`] || 0);
+        });
+      }
     });
     return tot;
-  }, [produccion]);
+  }, [produccion, casetasValidas]);
 
+  // Para Alimento y Existencia, usar casetasValidas y filtrar los datos igual que en Producción
   const totalesAlimento = useMemo(() => {
     let existenciaInicial = 0, entrada = 0, consumo = 0;
-    alimento.forEach((row: any) => {
-      existenciaInicial += row.existencia_inicial || 0;
-      entrada += row.entrada || 0;
-      consumo += row.consumo || 0;
+    casetasValidas.forEach(caseta => {
+      const row = alimento.find((r: any) => r.caseta === caseta);
+      if (row) {
+        existenciaInicial += Number(row.existencia_inicial || 0);
+        entrada += Number(row.entrada || 0);
+        consumo += Number(row.consumo || 0);
+      }
     });
     return { existenciaInicial, entrada, consumo };
-  }, [alimento]);
+  }, [alimento, casetasValidas]);
 
   const totalesExistencia = useMemo(() => {
     let inicial = 0, entrada = 0, mortalidad = 0, salida = 0, final = 0;
-    existencia.forEach((row: any) => {
-      inicial += row.inicial || 0;
-      entrada += row.entrada || 0;
-      mortalidad += row.mortalidad || 0;
-      salida += row.salida || 0;
-      final += row.final || 0;
+    casetasValidas.forEach(caseta => {
+      const row = existencia.find((r: any) => r.caseta === caseta);
+      if (row) {
+        inicial += Number(row.inicial || 0);
+        entrada += Number(row.entrada || 0);
+        mortalidad += Number(row.mortalidad || 0);
+        salida += Number(row.salida || 0);
+        final += Number(row.final || 0);
+      }
     });
     return { inicial, entrada, mortalidad, salida, final };
-  }, [existencia]);
+  }, [existencia, casetasValidas]);
 
   const totalesEnvase = useMemo(() => {
     let inicial = 0, recibido = 0, consumo = 0, final = 0;
@@ -119,30 +146,30 @@ export default function ResumenSeccion() {
       </style></head><body>`;
       html += `<div class='titulo'>UNION AGROPECUARIA ALZE SA DE CV.</div>`;
       html += `<div class='subtitulo'>REPORTE DE PRODUCCIÓN DIARIA EN GRANJAS</div>`;
-      html += `<div class='encabezado'><span>SECCIÓN: ${seccionSeleccionada || ''}</span><span>FECHA: ${fecha}</span></div>`;
+      html += `<div class='encabezado'><span>SECCIÓN: ${seccionSeleccionada?.Nombre || ''}</span><span>FECHA: ${fecha}</span></div>`;
       // PRODUCCIÓN
       html += `<div class='tabla-bloque'>PRODUCCIÓN</div>`;
       html += `<table class='tabla-prod'><tr><th rowspan='2'>CASETA</th>`;
       columnasProduccion.forEach(col => {
-        html += `<th colspan='2'>${col}</th>`;
+        html += `<th colspan='2'>${col.label}</th>`;
       });
       html += `</tr><tr>`;
       columnasProduccion.forEach(() => {
         html += `<th>Cajas</th><th>Restos</th>`;
       });
       html += `</tr>`;
-      casetas.forEach(caseta => {
-        const row = produccion.find((r: any) => r.caseta === caseta) || {};
-        html += `<tr><td>${caseta}</td>`;
+      casetasFiltradas.forEach(caseta => {
+        const row = produccion.find((r: any) => r.caseta === caseta.Nombre) || {};
+        html += `<tr><td>${caseta.Nombre}</td>`;
         columnasProduccion.forEach(col => {
-          html += `<td>${row[`${col.toLowerCase()}_cajas`] || ''}</td><td>${row[`${col.toLowerCase()}_restos`] || ''}</td>`;
+          html += `<td>${row[`${col.key}_cajas`] || ''}</td><td>${row[`${col.key}_restos`] || ''}</td>`;
         });
         html += `</tr>`;
       });
       // Totales Producción
       html += `<tr><td><b>TOTAL</b></td>`;
       columnasProduccion.forEach(col => {
-        html += `<td><b>${totalesProduccion[col].cajas}</b></td><td><b>${totalesProduccion[col].restos}</b></td>`;
+        html += `<td><b>${totalesProduccion[col.key].cajas}</b></td><td><b>${totalesProduccion[col.key].restos}</b></td>`;
       });
       html += `</tr></table>`;
       // Tablas inferiores alineadas horizontalmente
@@ -150,7 +177,7 @@ export default function ResumenSeccion() {
       // ALIMENTO
       html += `<div style='flex:1;'><div class='tabla-bloque'>ALIMENTO</div>`;
       html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>CONSUMO</th><th>TIPO</th></tr>`;
-      casetas.forEach(caseta => {
+      casetasValidas.forEach(caseta => {
         const row = alimento.find((r: any) => r.caseta === caseta) || {};
         html += `<tr><td>${caseta}</td><td>${row.existencia_inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.consumo || ''}</td><td>${row.tipo || ''}</td></tr>`;
       });
@@ -158,7 +185,7 @@ export default function ResumenSeccion() {
       // EXISTENCIA
       html += `<div style='flex:1;'><div class='tabla-bloque'>EXISTENCIA</div>`;
       html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>MORTALIDAD</th><th>SALIDA</th><th>EDAD</th><th>EXIST. FINAL</th></tr>`;
-      casetas.forEach(caseta => {
+      casetasValidas.forEach(caseta => {
         const row = existencia.find((r: any) => r.caseta === caseta) || {};
         html += `<tr><td>${caseta}</td><td>${row.inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.mortalidad || ''}</td><td>${row.salida || ''}</td><td>${row.edad || ''}</td><td>${row.final || ''}</td></tr>`;
       });
@@ -187,6 +214,20 @@ export default function ResumenSeccion() {
     }
   };
 
+  const handleEliminarDatos = async () => {
+    try {
+      await DatabaseQueries.clearAllData();
+      // Recarga los datos
+      DatabaseQueries.getProduccionByFecha(fecha, granjaId).then(setProduccion);
+      DatabaseQueries.getAlimentoByFecha(fecha, granjaId).then(setAlimento);
+      DatabaseQueries.getExistenciaByFecha(fecha, granjaId).then(setExistencia);
+      DatabaseQueries.getEnvaseByFecha(fecha, granjaId).then(setEnvase);
+      Alert.alert('Datos eliminados', 'Todos los datos han sido eliminados.');
+    } catch (error) {
+      Alert.alert('Error', 'No se pudieron eliminar los datos.');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <SafeAreaView style={styles.headerSafeArea}>
@@ -197,7 +238,7 @@ export default function ResumenSeccion() {
           >
             <Ionicons name="arrow-back" size={28} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={2} ellipsizeMode="tail">Resumen de la sección {seccionSeleccionada}</Text>
+          <Text style={styles.headerTitle} numberOfLines={2} ellipsizeMode="tail">Resumen de la sección {seccionSeleccionada?.Nombre}</Text>
           <View style={{ width: 40 }} />
         </View>
         <Text style={styles.headerFecha}>{fecha}</Text>
@@ -207,38 +248,55 @@ export default function ResumenSeccion() {
         <Text style={styles.sectionTitle}>Producción</Text>
         <ScrollView horizontal>
           <View style={styles.table}>
-            <View style={styles.headerRow}>
-              <Text style={styles.headerCell}>CASETA</Text>
-              {columnasProduccion.map(col => (
-                <Text key={col} style={styles.headerCell}>{col} Cajas</Text>
-              ))}
-              {columnasProduccion.map(col => (
-                <Text key={col + 'r'} style={styles.headerCell}>{col} Restos</Text>
+            <View style={{ flexDirection: 'row' }}>
+              {[{ label: 'CASETA' }, ...columnasProduccion.map(col => ({ label: col.label + ' Cajas' })), ...columnasProduccion.map(col => ({ label: col.label + ' Restos' }))].map((col, idx, arr) => (
+                <View
+                  key={col.label}
+                  style={[
+                    styles.cellHeader,
+                    idx === arr.length - 1 && { borderRightWidth: 0 }
+                  ]}
+                >
+                  <Text style={styles.cellHeaderText}>{col.label}</Text>
+                </View>
               ))}
             </View>
-            {casetas.map((caseta, idx) => {
+            {casetasValidas.map((caseta, idx) => {
               const row = produccion.find((r: any) => r.caseta === caseta) || {};
+              const cells = [
+                <View key="caseta" style={styles.cell}><Text style={styles.cellText}>{caseta}</Text></View>,
+                ...columnasProduccion.map(col => (
+                  <View key={col.label} style={styles.cell}><Text style={styles.cellText}>{row[`${col.key}_cajas`] ?? ' '}</Text></View>
+                )),
+                ...columnasProduccion.map(col => (
+                  <View key={col.label + 'r'} style={styles.cell}><Text style={styles.cellText}>{row[`${col.key}_restos`] ?? ' '}</Text></View>
+                ))
+              ];
               return (
-                <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt]}>
-                  <Text style={styles.casetaCell}>{caseta}</Text>
-                  {columnasProduccion.map(col => (
-                    <Text key={col} style={styles.inputCell}>{row[`${col.toLowerCase()}_cajas`] ?? ' '}</Text>
-                  ))}
-                  {columnasProduccion.map(col => (
-                    <Text key={col + 'r'} style={styles.inputCell}>{row[`${col.toLowerCase()}_restos`] ?? ' '}</Text>
-                  ))}
+                <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt, { flexDirection: 'row' }]}> 
+                  {cells.map((cell, i) =>
+                    React.cloneElement(cell, {
+                      style: [cell.props.style, i === cells.length - 1 && { borderRightWidth: 0 }]
+                    })
+                  )}
                 </View>
               );
             })}
             {/* Totales */}
-            <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
-              <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
-              {columnasProduccion.map(col => (
-                <Text key={col} style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesProduccion[col].cajas}</Text>
-              ))}
-              {columnasProduccion.map(col => (
-                <Text key={col + 'r'} style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesProduccion[col].restos}</Text>
-              ))}
+            <View style={[styles.dataRow, { flexDirection: 'row' }]}> 
+              {[
+                <View key="total" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>TOTAL</Text></View>,
+                ...columnasProduccion.map(col => (
+                  <View key={col.label} style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesProduccion[col.key].cajas}</Text></View>
+                )),
+                ...columnasProduccion.map(col => (
+                  <View key={col.label + 'r'} style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesProduccion[col.key].restos}</Text></View>
+                ))
+              ].map((cell, i, arr) =>
+                React.cloneElement(cell, {
+                  style: [cell.props.style, i === arr.length - 1 && { borderRightWidth: 0 }]
+                })
+              )}
             </View>
           </View>
         </ScrollView>
@@ -246,31 +304,50 @@ export default function ResumenSeccion() {
         <Text style={styles.sectionTitle}>Alimento</Text>
         <ScrollView horizontal>
           <View style={styles.table}>
-            <View style={styles.headerRow}>
-              <Text style={styles.headerCell}>CASETA</Text>
-              <Text style={styles.headerCell}>EXISTENCIA INICIAL</Text>
-              <Text style={styles.headerCell}>ENTRADA</Text>
-              <Text style={styles.headerCell}>CONSUMO</Text>
-              <Text style={styles.headerCell}>TIPO</Text>
+            <View style={{ flexDirection: 'row' }}>
+              {[{ label: 'CASETA' }, { label: 'EXISTENCIA INICIAL' }, { label: 'ENTRADA' }, { label: 'CONSUMO' }, { label: 'TIPO' }].map((col, idx, arr) => (
+                <View
+                  key={col.label}
+                  style={[
+                    styles.cellHeader,
+                    idx === arr.length - 1 && { borderRightWidth: 0 }
+                  ]}
+                >
+                  <Text style={styles.cellHeaderText}>{col.label}</Text>
+                </View>
+              ))}
             </View>
-            {casetas.map((caseta, idx) => {
+            {casetasValidas.map((caseta, idx) => {
               const row = alimento.find((r: any) => r.caseta === caseta) || {};
+              const cells = [
+                <View key="caseta" style={styles.cell}><Text style={styles.cellText}>{caseta}</Text></View>,
+                <View key="existencia_inicial" style={styles.cell}><Text style={styles.cellText}>{row.existencia_inicial || ''}</Text></View>,
+                <View key="entrada" style={styles.cell}><Text style={styles.cellText}>{row.entrada || ''}</Text></View>,
+                <View key="consumo" style={styles.cell}><Text style={styles.cellText}>{row.consumo || ''}</Text></View>,
+                <View key="tipo" style={styles.cell}><Text style={styles.cellText}>{row.tipo || ''}</Text></View>,
+              ];
               return (
-                <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt]}>
-                  <Text style={styles.casetaCell}>{caseta}</Text>
-                  <Text style={styles.inputCell}>{row.existencia_inicial || ''}</Text>
-                  <Text style={styles.inputCell}>{row.entrada || ''}</Text>
-                  <Text style={styles.inputCell}>{row.consumo || ''}</Text>
-                  <Text style={styles.inputCell}>{row.tipo || ''}</Text>
+                <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt, { flexDirection: 'row' }]}> 
+                  {cells.map((cell, i) =>
+                    React.cloneElement(cell, {
+                      style: [cell.props.style, i === cells.length - 1 && { borderRightWidth: 0 }]
+                    })
+                  )}
                 </View>
               );
             })}
-            <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
-              <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesAlimento.existenciaInicial}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesAlimento.entrada}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesAlimento.consumo}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}></Text>
+            <View style={[styles.dataRow, { flexDirection: 'row' }]}> 
+              {[
+                <View key="total" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>TOTAL</Text></View>,
+                <View key="existencia_inicial" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesAlimento.existenciaInicial}</Text></View>,
+                <View key="entrada" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesAlimento.entrada}</Text></View>,
+                <View key="consumo" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesAlimento.consumo}</Text></View>,
+                <View key="tipo" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}></Text></View>,
+              ].map((cell, i, arr) =>
+                React.cloneElement(cell, {
+                  style: [cell.props.style, i === arr.length - 1 && { borderRightWidth: 0 }]
+                })
+              )}
             </View>
           </View>
         </ScrollView>
@@ -278,37 +355,54 @@ export default function ResumenSeccion() {
         <Text style={styles.sectionTitle}>Existencia</Text>
         <ScrollView horizontal>
           <View style={styles.table}>
-            <View style={styles.headerRow}>
-              <Text style={styles.headerCell}>CASETA</Text>
-              <Text style={styles.headerCell}>EXIST. INICIAL</Text>
-              <Text style={styles.headerCell}>ENTRADA</Text>
-              <Text style={styles.headerCell}>MORTALIDAD</Text>
-              <Text style={styles.headerCell}>SALIDA</Text>
-              <Text style={styles.headerCell}>EDAD</Text>
-              <Text style={styles.headerCell}>EXIST. FINAL</Text>
+            <View style={{ flexDirection: 'row' }}>
+              {[{ label: 'CASETA' }, { label: 'EXIST. INICIAL' }, { label: 'ENTRADA' }, { label: 'MORTALIDAD' }, { label: 'SALIDA' }, { label: 'EDAD' }, { label: 'EXIST. FINAL' }].map((col, idx, arr) => (
+                <View
+                  key={col.label}
+                  style={[
+                    styles.cellHeader,
+                    idx === arr.length - 1 && { borderRightWidth: 0 }
+                  ]}
+                >
+                  <Text style={styles.cellHeaderText}>{col.label}</Text>
+                </View>
+              ))}
             </View>
-            {casetas.map((caseta, idx) => {
+            {casetasValidas.map((caseta, idx) => {
               const row = existencia.find((r: any) => r.caseta === caseta) || {};
+              const cells = [
+                <View key="caseta" style={styles.cell}><Text style={styles.cellText}>{caseta}</Text></View>,
+                <View key="inicial" style={styles.cell}><Text style={styles.cellText}>{row.inicial || ''}</Text></View>,
+                <View key="entrada" style={styles.cell}><Text style={styles.cellText}>{row.entrada || ''}</Text></View>,
+                <View key="mortalidad" style={styles.cell}><Text style={styles.cellText}>{row.mortalidad || ''}</Text></View>,
+                <View key="salida" style={styles.cell}><Text style={styles.cellText}>{row.salida || ''}</Text></View>,
+                <View key="edad" style={styles.cell}><Text style={styles.cellText}>{row.edad || ''}</Text></View>,
+                <View key="final" style={styles.cell}><Text style={styles.cellText}>{row.final || ''}</Text></View>,
+              ];
               return (
-                <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt]}>
-                  <Text style={styles.casetaCell}>{caseta}</Text>
-                  <Text style={styles.inputCell}>{row.inicial || ''}</Text>
-                  <Text style={styles.inputCell}>{row.entrada || ''}</Text>
-                  <Text style={styles.inputCell}>{row.mortalidad || ''}</Text>
-                  <Text style={styles.inputCell}>{row.salida || ''}</Text>
-                  <Text style={styles.inputCell}>{row.edad || ''}</Text>
-                  <Text style={styles.inputCell}>{row.final || ''}</Text>
+                <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt, { flexDirection: 'row' }]}> 
+                  {cells.map((cell, i) =>
+                    React.cloneElement(cell, {
+                      style: [cell.props.style, i === cells.length - 1 && { borderRightWidth: 0 }]
+                    })
+                  )}
                 </View>
               );
             })}
-            <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
-              <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.inicial}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.entrada}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.mortalidad}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.salida}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}></Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesExistencia.final}</Text>
+            <View style={[styles.dataRow, { flexDirection: 'row' }]}> 
+              {[
+                <View key="total" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>TOTAL</Text></View>,
+                <View key="inicial" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.inicial}</Text></View>,
+                <View key="entrada" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.entrada}</Text></View>,
+                <View key="mortalidad" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.mortalidad}</Text></View>,
+                <View key="salida" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.salida}</Text></View>,
+                <View key="edad" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}></Text></View>,
+                <View key="final" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.final}</Text></View>,
+              ].map((cell, i, arr) =>
+                React.cloneElement(cell, {
+                  style: [cell.props.style, i === arr.length - 1 && { borderRightWidth: 0 }]
+                })
+              )}
             </View>
           </View>
         </ScrollView>
@@ -316,31 +410,50 @@ export default function ResumenSeccion() {
         <Text style={styles.sectionTitle}>Envase</Text>
         <ScrollView horizontal>
           <View style={styles.table}>
-            <View style={styles.headerRow}>
-              <Text style={styles.headerCell}>TIPO</Text>
-              <Text style={styles.headerCell}>EXIST. INICIAL</Text>
-              <Text style={styles.headerCell}>RECIBIDO</Text>
-              <Text style={styles.headerCell}>CONSUMO</Text>
-              <Text style={styles.headerCell}>EXIST. FINAL</Text>
+            <View style={{ flexDirection: 'row' }}>
+              {[{ label: 'TIPO' }, { label: 'EXIST. INICIAL' }, { label: 'RECIBIDO' }, { label: 'CONSUMO' }, { label: 'EXIST. FINAL' }].map((col, idx, arr) => (
+                <View
+                  key={col.label}
+                  style={[
+                    styles.cellHeader,
+                    idx === arr.length - 1 && { borderRightWidth: 0 }
+                  ]}
+                >
+                  <Text style={styles.cellHeaderText}>{col.label}</Text>
+                </View>
+              ))}
             </View>
-            {envases.map(envaseTipo => {
+            {envases.map((envaseTipo, idx) => {
               const row = envase.find((r: any) => r.tipo === envaseTipo) || {};
+              const cells = [
+                <View key="tipo" style={styles.cell}><Text style={styles.cellText}>{envaseTipo}</Text></View>,
+                <View key="inicial" style={styles.cell}><Text style={styles.cellText}>{row.inicial || ''}</Text></View>,
+                <View key="recibido" style={styles.cell}><Text style={styles.cellText}>{row.recibido || ''}</Text></View>,
+                <View key="consumo" style={styles.cell}><Text style={styles.cellText}>{row.consumo || ''}</Text></View>,
+                <View key="final" style={styles.cell}><Text style={styles.cellText}>{row.final || ''}</Text></View>,
+              ];
               return (
-                <View key={envaseTipo} style={styles.dataRow}>
-                  <Text style={styles.casetaCell}>{envaseTipo}</Text>
-                  <Text style={styles.inputCell}>{row.inicial || ''}</Text>
-                  <Text style={styles.inputCell}>{row.recibido || ''}</Text>
-                  <Text style={styles.inputCell}>{row.consumo || ''}</Text>
-                  <Text style={styles.inputCell}>{row.final || ''}</Text>
+                <View key={envaseTipo} style={[styles.dataRow, { flexDirection: 'row', backgroundColor: '#fff' }]}> 
+                  {cells.map((cell, i) =>
+                    React.cloneElement(cell, {
+                      style: [cell.props.style, i === cells.length - 1 && { borderRightWidth: 0 }]
+                    })
+                  )}
                 </View>
               );
             })}
-            <View style={[styles.dataRow, { backgroundColor: '#e0e7ef' }]}> 
-              <Text style={[styles.casetaCell, { fontWeight: 'bold' }]}>TOTAL</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesEnvase.inicial}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesEnvase.recibido}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesEnvase.consumo}</Text>
-              <Text style={[styles.inputCell, { fontWeight: 'bold', backgroundColor: '#e0e7ef' }]}>{totalesEnvase.final}</Text>
+            <View style={[styles.dataRow, { flexDirection: 'row', backgroundColor: '#fff' }]}> 
+              {[
+                <View key="total" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>TOTAL</Text></View>,
+                <View key="inicial" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesEnvase.inicial}</Text></View>,
+                <View key="recibido" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesEnvase.recibido}</Text></View>,
+                <View key="consumo" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesEnvase.consumo}</Text></View>,
+                <View key="final" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesEnvase.final}</Text></View>,
+              ].map((cell, i, arr) =>
+                React.cloneElement(cell, {
+                  style: [cell.props.style, i === arr.length - 1 && { borderRightWidth: 0 }]
+                })
+              )}
             </View>
           </View>
         </ScrollView>
@@ -348,6 +461,10 @@ export default function ResumenSeccion() {
         <TouchableOpacity style={styles.btnExportar} onPress={exportarPDF}>
           <Image source={require('../../assets/Iconos/PDF.png')} style={styles.resumenIcon} resizeMode="contain" />
           <Text style={styles.btnExportarText}>Exportar a PDF</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.btnExportar, { backgroundColor: '#d9534f', marginTop: 0 }]} onPress={handleEliminarDatos}>
+          <Ionicons name="trash" size={24} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.btnExportarText}>Eliminar datos</Text>
         </TouchableOpacity>
         {/* Inputs de firmas y nombres eliminados */}
       </ScrollView>
@@ -372,6 +489,11 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 2,
     flexWrap: 'wrap',
+    backgroundColor: '#e0e7ef',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomWidth: 1,
+    borderColor: '#b0b0b0',
   },
   backButton: {
     padding: 6,
@@ -403,24 +525,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     overflow: 'hidden',
   },
-  headerRow: {
-    flexDirection: 'row',
-    backgroundColor: '#e0e7ef',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderBottomWidth: 1,
-    borderColor: '#b0b0b0',
-  },
   headerCell: {
     fontWeight: 'bold',
     fontSize: 13,
     paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingHorizontal: 0, // Sin padding extra
     width: COL_WIDTH,
-    textAlign: 'center',
+    textAlign: 'center', // Centrado para todas las celdas
     color: '#222',
     borderRightWidth: 1,
     borderColor: '#b0b0b0',
+    backgroundColor: '#e0e7ef',
   },
   dataRow: {
     flexDirection: 'row',
@@ -436,12 +551,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 13,
     width: COL_WIDTH,
-    textAlign: 'center',
+    textAlign: 'center', // Centrado para alineación perfecta
     color: '#333',
     borderRightWidth: 1,
     borderColor: '#b0b0b0',
     paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingHorizontal: 0, // Sin padding extra
   },
   inputCell: {
     fontSize: 13,
@@ -449,7 +564,7 @@ const styles = StyleSheet.create({
     width: COL_WIDTH,
     textAlign: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     borderRightWidth: 1,
     borderColor: '#b0b0b0',
   },
@@ -457,4 +572,44 @@ const styles = StyleSheet.create({
   btnExportarText: { color: '#fff', fontWeight: 'bold', fontSize: 16, marginLeft: 10 },
   resumenIcon: { width: 28, height: 28 },
   inputFirma: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 6, padding: 8, marginBottom: 6, backgroundColor: '#fff', fontSize: 13 },
+  casetaCellHeader: {
+    textAlign: 'left',
+    paddingHorizontal: 12,
+    width: COL_WIDTH,
+    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#222',
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+    backgroundColor: '#e0e7ef',
+  },
+  cell: {
+    width: COL_WIDTH,
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 6,
+  },
+  cellHeader: {
+    width: COL_WIDTH,
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+    backgroundColor: '#e0e7ef',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  cellText: {
+    fontSize: 13,
+    color: '#222',
+    textAlign: 'center',
+  },
+  cellHeaderText: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#222',
+    textAlign: 'center',
+  },
 });

@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation, KeyboardAvoidingView } from 'react-native';
 import { DatabaseQueries } from '../database/offline/queries';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -7,8 +7,17 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useSeccion } from './EnvaseScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useCasetas } from '../hooks/useCasetas';
+import { useGranjas } from '../hooks/useGranjas';
 
-const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
+// Definir el tipo para los datos de cada caseta
+interface CasetaAlimento {
+  existenciaInicial: string;
+  entrada: string;
+  consumo: string;
+  tipo: string;
+}
+
 const columnas = ['Existencia Inicial', 'Entrada', 'Consumo', 'Tipo'];
 
 export default function AlimentoScreen() {
@@ -23,29 +32,45 @@ export default function AlimentoScreen() {
   // });
   const fechaHoy = new Date().toISOString().split('T')[0];
 
+  // Obtener GranjaID de la granja seleccionada (asumiendo que seccionSeleccionada es "Granja - Caseta")
+  const granjaId = seccionSeleccionada?.GranjaID ?? null;
+  const granjaNombre = seccionSeleccionada?.Nombre ?? '';
+  const { granjas } = useGranjas();
+  const granja = granjas.find(g => g.Nombre === granjaNombre);
+  const { casetas, loading: loadingCasetas, error: errorCasetas } = useCasetas(granjaId);
+
+  // Filtrar solo las casetas de la granja seleccionada (por si la API no lo hace)
+  const casetasFiltradas = casetas?.filter(c => c.GranjaID === granjaId) ?? [];
+
   // Estructura: { [caseta]: { existenciaInicial, entrada, consumo, tipo } }
-  const [tabla, setTabla] = useState(() => {
-    const obj: any = {};
-    casetas.forEach(caseta => {
-      obj[caseta] = { existenciaInicial: '', entrada: '', consumo: '', tipo: '' };
+  const [tabla, setTabla] = useState<Record<string, CasetaAlimento>>({});
+
+  // Sincronizar tabla cuando cambian las casetas
+  useEffect(() => {
+    if (!casetas) return;
+    setTabla((prev: Record<string, CasetaAlimento>) => {
+      const obj: Record<string, CasetaAlimento> = {};
+      casetas.forEach(caseta => {
+        obj[caseta.Nombre] = prev[caseta.Nombre] || { existenciaInicial: '', entrada: '', consumo: '', tipo: '' };
+      });
+      return obj;
     });
-    return obj;
-  });
+  }, [casetas]);
 
   // Calcular totales
   const totales = useMemo(() => {
     let existenciaInicial = 0, entrada = 0, consumo = 0;
-    casetas.forEach(caseta => {
-      existenciaInicial += Number(tabla[caseta].existenciaInicial) || 0;
-      entrada += Number(tabla[caseta].entrada) || 0;
-      consumo += Number(tabla[caseta].consumo) || 0;
+    casetas?.forEach(caseta => {
+      existenciaInicial += Number(tabla[caseta.Nombre]?.existenciaInicial) || 0;
+      entrada += Number(tabla[caseta.Nombre]?.entrada) || 0;
+      consumo += Number(tabla[caseta.Nombre]?.consumo) || 0;
     });
     return { existenciaInicial, entrada, consumo };
-  }, [tabla]);
+  }, [tabla, casetas]);
 
   // Manejar cambios en la tabla
   const handleChange = (caseta: string, campo: string, valor: string) => {
-    setTabla((prev: typeof tabla) => ({
+    setTabla((prev: Record<string, CasetaAlimento>) => ({
       ...prev,
       [caseta]: {
         ...prev[caseta],
@@ -56,21 +81,22 @@ export default function AlimentoScreen() {
 
   // Guardar datos en la base de datos
   const handleGuardar = async () => {
-    for (const caseta of casetas) {
+    for (const caseta of casetas || []) {
       // Solo guarda si hay algún campo lleno
       if (
-        tabla[caseta].existenciaInicial ||
-        tabla[caseta].entrada ||
-        tabla[caseta].consumo ||
-        tabla[caseta].tipo
+        tabla[caseta.Nombre]?.existenciaInicial ||
+        tabla[caseta.Nombre]?.entrada ||
+        tabla[caseta.Nombre]?.consumo ||
+        tabla[caseta.Nombre]?.tipo
       ) {
         const data: any = {
-          caseta: seccionSeleccionada,
+          caseta: caseta.Nombre,
           fecha: fechaHoy,
-          existencia_inicial: Number(tabla[caseta].existenciaInicial) || 0,
-          entrada: Number(tabla[caseta].entrada) || 0,
-          consumo: Number(tabla[caseta].consumo) || 0,
-          tipo: tabla[caseta].tipo,
+          granja_id: granjaId,
+          existencia_inicial: Number(tabla[caseta.Nombre]?.existenciaInicial) || 0,
+          entrada: Number(tabla[caseta.Nombre]?.entrada) || 0,
+          consumo: Number(tabla[caseta.Nombre]?.consumo) || 0,
+          tipo: tabla[caseta.Nombre]?.tipo,
           edad: '',
         };
         await DatabaseQueries.insertAlimento(data);
@@ -83,7 +109,7 @@ export default function AlimentoScreen() {
   // Estado para controlar qué casetas están abiertas
   const [casetasAbiertas, setCasetasAbiertas] = useState<{ [caseta: string]: boolean }>(() => {
     const obj: { [caseta: string]: boolean } = {};
-    casetas.forEach(c => { obj[c] = false; });
+    casetas?.forEach(c => { obj[c.Nombre] = false; });
     return obj;
   });
 
@@ -117,22 +143,24 @@ export default function AlimentoScreen() {
               style={styles.headerImage}
               resizeMode="contain"
             />
-            <Text style={styles.subtitle}>{seccionSeleccionada} - {fechaHoy}</Text>
+            <Text style={styles.subtitle}>{seccionSeleccionada?.Nombre} - {fechaHoy}</Text>
           </View>
-          {casetas.map((caseta, idx) => (
-            <View key={caseta} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
-              <TouchableOpacity onPress={() => toggleCaseta(caseta)} style={styles.casetaHeader} activeOpacity={0.7}>
-                <Text style={styles.casetaTitle}>{caseta}</Text>
-                <Text style={styles.caret}>{casetasAbiertas[caseta] ? '\u25b2' : '\u25bc'}</Text>
+          {loadingCasetas && <Text>Cargando casetas...</Text>}
+          {errorCasetas && <Text style={{ color: 'red' }}>{errorCasetas}</Text>}
+          {casetasFiltradas && casetasFiltradas.map((caseta, idx) => (
+            <View key={caseta.Nombre} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
+              <TouchableOpacity onPress={() => toggleCaseta(caseta.Nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
+                <Text style={styles.casetaTitle}>{caseta.Nombre}</Text>
+                <Text style={styles.caret}>{casetasAbiertas[caseta.Nombre] ? '\u25b2' : '\u25bc'}</Text>
               </TouchableOpacity>
-              {casetasAbiertas[caseta] && (
+              {casetasAbiertas[caseta.Nombre] && (
                 <View style={styles.casetaContent}>
                   <View style={styles.inputRow}>
                     <Text style={styles.inputLabel}>Existencia Inicial</Text>
                     <TextInput
                       style={styles.inputCell}
-                      value={tabla[caseta].existenciaInicial}
-                      onChangeText={v => handleChange(caseta, 'existenciaInicial', v)}
+                      value={tabla[caseta.Nombre]?.existenciaInicial || ''}
+                      onChangeText={v => handleChange(caseta.Nombre, 'existenciaInicial', v)}
                       keyboardType="numeric"
                       placeholder="0"
                     />
@@ -141,8 +169,8 @@ export default function AlimentoScreen() {
                     <Text style={styles.inputLabel}>Entrada</Text>
                     <TextInput
                       style={styles.inputCell}
-                      value={tabla[caseta].entrada}
-                      onChangeText={v => handleChange(caseta, 'entrada', v)}
+                      value={tabla[caseta.Nombre]?.entrada || ''}
+                      onChangeText={v => handleChange(caseta.Nombre, 'entrada', v)}
                       keyboardType="numeric"
                       placeholder="0"
                     />
@@ -151,8 +179,8 @@ export default function AlimentoScreen() {
                     <Text style={styles.inputLabel}>Consumo</Text>
                     <TextInput
                       style={styles.inputCell}
-                      value={tabla[caseta].consumo}
-                      onChangeText={v => handleChange(caseta, 'consumo', v)}
+                      value={tabla[caseta.Nombre]?.consumo || ''}
+                      onChangeText={v => handleChange(caseta.Nombre, 'consumo', v)}
                       keyboardType="numeric"
                       placeholder="0"
                     />
@@ -161,8 +189,8 @@ export default function AlimentoScreen() {
                     <Text style={styles.inputLabel}>Tipo</Text>
                     <TextInput
                       style={styles.inputCell}
-                      value={tabla[caseta].tipo}
-                      onChangeText={v => handleChange(caseta, 'tipo', v)}
+                      value={tabla[caseta.Nombre]?.tipo || ''}
+                      onChangeText={v => handleChange(caseta.Nombre, 'tipo', v)}
                       placeholder="Tipo"
                     />
                   </View>

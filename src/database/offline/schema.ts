@@ -5,6 +5,7 @@ export const createTables = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     caseta TEXT NOT NULL,
     fecha TEXT NOT NULL,
+    granja_id INTEGER NOT NULL,
     blanco_cajas INTEGER DEFAULT 0,
     blanco_restos INTEGER DEFAULT 0,
     roto1_cajas INTEGER DEFAULT 0,
@@ -24,7 +25,7 @@ export const createTables = `
     extra240_cajas INTEGER DEFAULT 0,
     extra240_restos INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(caseta, fecha)
+    UNIQUE(caseta, fecha, granja_id)
   );
 
   -- Tabla de alimento
@@ -32,13 +33,14 @@ export const createTables = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     caseta TEXT NOT NULL,
     fecha TEXT NOT NULL,
+    granja_id INTEGER NOT NULL,
     existencia_inicial REAL DEFAULT 0,
     entrada REAL DEFAULT 0,
     consumo REAL DEFAULT 0,
     tipo TEXT DEFAULT '',
     edad TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(caseta, fecha)
+    UNIQUE(caseta, fecha, granja_id)
   );
 
   -- Tabla de existencia
@@ -46,6 +48,7 @@ export const createTables = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     caseta TEXT NOT NULL,
     fecha TEXT NOT NULL,
+    granja_id INTEGER NOT NULL,
     inicial INTEGER DEFAULT 0,
     entrada INTEGER DEFAULT 0,
     mortalidad INTEGER DEFAULT 0,
@@ -53,7 +56,7 @@ export const createTables = `
     edad INTEGER DEFAULT 0,
     final INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(caseta, fecha)
+    UNIQUE(caseta, fecha, granja_id)
   );
 
   -- Tabla de envase
@@ -61,12 +64,13 @@ export const createTables = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     caseta TEXT NOT NULL,
     fecha TEXT NOT NULL,
+    granja_id INTEGER NOT NULL,
     tipo TEXT DEFAULT '',
     inicial REAL DEFAULT 0,
     recibido REAL DEFAULT 0,
     consumo REAL DEFAULT 0,
     final REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(caseta, fecha)
+    UNIQUE(caseta, fecha, granja_id)
   );
 `

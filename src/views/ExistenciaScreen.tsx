@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation, KeyboardAvoidingView } from 'react-native';
 import { DatabaseQueries } from '../database/offline/queries';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -7,15 +7,36 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useSeccion } from './EnvaseScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useCasetas } from '../hooks/useCasetas';
+import { useGranjas } from '../hooks/useGranjas';
 
-const casetas = Array.from({ length: 9 }, (_, i) => `CASETA ${i + 1}`);
 const columnas = ['Existencia Inicial', 'Entrada', 'Mortalidad', 'Salida', 'Edad'];
+
+// Definir el tipo para los datos de cada caseta en existencia
+interface CasetaExistencia {
+  existenciaInicial: string;
+  entrada: string;
+  mortalidad: string;
+  salida: string;
+  edad: string;
+  existenciaFinal: string;
+}
 
 export default function ExistenciaScreen() {
   // const route = useRoute();
   // const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { seccionSeleccionada } = useSeccion();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const granjaId = seccionSeleccionada?.GranjaID ?? null;
+  const granjaNombre = seccionSeleccionada?.Nombre ?? '';
+  const { granjas } = useGranjas();
+  const granja = granjas.find(g => g.Nombre === granjaNombre);
+  const { casetas, loading: loadingCasetas, error: errorCasetas } = useCasetas(granjaId);
+
+  // Filtrar solo las casetas de la granja seleccionada (por si la API no lo hace)
+  const casetasFiltradas = casetas?.filter(c => c.GranjaID === granjaId) ?? [];
+
   // Elimina el estado de fecha y usa siempre la fecha actual en el render
   // const [fecha, setFecha] = useState(() => {
   //   const today = new Date();
@@ -24,30 +45,44 @@ export default function ExistenciaScreen() {
   const fechaHoy = new Date().toISOString().split('T')[0];
 
   // Estructura: { [caseta]: { existenciaInicial, entrada, mortalidad, salida, edad, existenciaFinal } }
-  const [tabla, setTabla] = useState(() => {
-    const obj: any = {};
-    casetas.forEach(caseta => {
-      obj[caseta] = { 
-        existenciaInicial: '', 
-        entrada: '', 
-        mortalidad: '', 
-        salida: '', 
-        edad: '',
-        existenciaFinal: '0'
-      };
+  const [tabla, setTabla] = useState<Record<string, CasetaExistencia>>({});
+
+  // Sincronizar tabla cuando cambian las casetas
+  useEffect(() => {
+    if (!casetas) return;
+    setTabla((prev: Record<string, CasetaExistencia>) => {
+      const obj: Record<string, CasetaExistencia> = { ...prev };
+      casetas.forEach(caseta => {
+        if (!obj[caseta.Nombre]) {
+          obj[caseta.Nombre] = {
+            existenciaInicial: '',
+            entrada: '',
+            mortalidad: '',
+            salida: '',
+            edad: '',
+            existenciaFinal: '0',
+          };
+        }
+      });
+      // Eliminar casetas que ya no existen
+      Object.keys(obj).forEach(nombre => {
+        if (!casetas.find(c => c.Nombre === nombre)) {
+          delete obj[nombre];
+        }
+      });
+      return obj;
     });
-    return obj;
-  });
+  }, [casetas]);
 
   // Calcular totales y existencia final
   const totales = useMemo(() => {
     let existenciaInicial = 0, entrada = 0, mortalidad = 0, salida = 0, existenciaFinal = 0;
     
     casetas.forEach(caseta => {
-      const inicial = Number(tabla[caseta].existenciaInicial) || 0;
-      const ent = Number(tabla[caseta].entrada) || 0;
-      const mort = Number(tabla[caseta].mortalidad) || 0;
-      const sal = Number(tabla[caseta].salida) || 0;
+      const inicial = Number(tabla[caseta.Nombre].existenciaInicial) || 0;
+      const ent = Number(tabla[caseta.Nombre].entrada) || 0;
+      const mort = Number(tabla[caseta.Nombre].mortalidad) || 0;
+      const sal = Number(tabla[caseta.Nombre].salida) || 0;
       const final = inicial + ent - mort - sal;
       
       existenciaInicial += inicial;
@@ -90,7 +125,7 @@ export default function ExistenciaScreen() {
     // }
     // Validar que al menos una caseta tenga algún campo lleno
     const algunaCasetaLlena = casetas.some(caseta =>
-      tabla[caseta].existenciaInicial || tabla[caseta].entrada || tabla[caseta].mortalidad || tabla[caseta].salida || tabla[caseta].edad || tabla[caseta].existenciaFinal
+      tabla[caseta.Nombre].existenciaInicial || tabla[caseta.Nombre].entrada || tabla[caseta.Nombre].mortalidad || tabla[caseta.Nombre].salida || tabla[caseta.Nombre].edad || tabla[caseta.Nombre].existenciaFinal
     );
     if (!algunaCasetaLlena) {
       Alert.alert('Error', 'Debes llenar al menos una caseta antes de continuar.');
@@ -101,22 +136,23 @@ export default function ExistenciaScreen() {
       for (const caseta of casetas) {
         // Solo guarda si hay algún campo lleno
         if (
-          tabla[caseta].existenciaInicial ||
-          tabla[caseta].entrada ||
-          tabla[caseta].mortalidad ||
-          tabla[caseta].salida ||
-          tabla[caseta].edad ||
-          tabla[caseta].existenciaFinal
+          tabla[caseta.Nombre].existenciaInicial ||
+          tabla[caseta.Nombre].entrada ||
+          tabla[caseta.Nombre].mortalidad ||
+          tabla[caseta.Nombre].salida ||
+          tabla[caseta.Nombre].edad ||
+          tabla[caseta.Nombre].existenciaFinal
         ) {
           const data: any = {
-            caseta: seccionSeleccionada,
+            caseta: caseta.Nombre,
             fecha: fechaHoy,
-            inicial: Number(tabla[caseta].existenciaInicial) || 0,
-            entrada: Number(tabla[caseta].entrada) || 0,
-            mortalidad: Number(tabla[caseta].mortalidad) || 0,
-            salida: Number(tabla[caseta].salida) || 0,
-            edad: Number(tabla[caseta].edad) || 0,
-            final: Number(tabla[caseta].existenciaFinal) || 0,
+            granja_id: granjaId,
+            inicial: Number(tabla[caseta.Nombre].existenciaInicial) || 0,
+            entrada: Number(tabla[caseta.Nombre].entrada) || 0,
+            mortalidad: Number(tabla[caseta.Nombre].mortalidad) || 0,
+            salida: Number(tabla[caseta.Nombre].salida) || 0,
+            edad: Number(tabla[caseta.Nombre].edad) || 0,
+            final: Number(tabla[caseta.Nombre].existenciaFinal) || 0,
           };
           await DatabaseQueries.insertExistencia(data);
         }
@@ -131,7 +167,7 @@ export default function ExistenciaScreen() {
   // Estado para controlar qué casetas están abiertas
   const [casetasAbiertas, setCasetasAbiertas] = useState<{ [caseta: string]: boolean }>(() => {
     const obj: { [caseta: string]: boolean } = {};
-    casetas.forEach(c => { obj[c] = false; });
+    casetas.forEach(c => { obj[c.Nombre] = false; });
     return obj;
   });
 
@@ -165,80 +201,91 @@ export default function ExistenciaScreen() {
               style={styles.headerImage}
               resizeMode="contain"
             />
-            <Text style={styles.subtitle}>{seccionSeleccionada} - {fechaHoy}</Text>
+            <Text style={styles.subtitle}>{seccionSeleccionada?.Nombre} - {fechaHoy}</Text>
           </View>
-          {casetas.map((caseta, idx) => (
-            <View key={caseta} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
-              <TouchableOpacity onPress={() => toggleCaseta(caseta)} style={styles.casetaHeader} activeOpacity={0.7}>
-                <Text style={styles.casetaTitle}>{caseta}</Text>
-                <Text style={styles.caret}>{casetasAbiertas[caseta] ? '▲' : '▼'}</Text>
-              </TouchableOpacity>
-              {casetasAbiertas[caseta] && (
-                <View style={styles.casetaContent}>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Existencia Inicial</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta].existenciaInicial}
-                      onChangeText={v => handleChange(caseta, 'existenciaInicial', v)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
+          {loadingCasetas && <Text>Cargando casetas...</Text>}
+          {errorCasetas && <Text style={{ color: 'red' }}>{errorCasetas}</Text>}
+          {casetasFiltradas.map((caseta, idx) => {
+            const datos = tabla[caseta.Nombre] || {
+              existenciaInicial: '',
+              entrada: '',
+              mortalidad: '',
+              salida: '',
+              edad: '',
+              existenciaFinal: '0',
+            };
+            return (
+              <View key={caseta.Nombre} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
+                <TouchableOpacity onPress={() => toggleCaseta(caseta.Nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
+                  <Text style={styles.casetaTitle}>{caseta.Nombre}</Text>
+                  <Text style={styles.caret}>{casetasAbiertas[caseta.Nombre] ? '\u25b2' : '\u25bc'}</Text>
+                </TouchableOpacity>
+                {casetasAbiertas[caseta.Nombre] && (
+                  <View style={styles.casetaContent}>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Existencia Inicial</Text>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={datos.existenciaInicial}
+                        onChangeText={v => handleChange(caseta.Nombre, 'existenciaInicial', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Entrada</Text>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={datos.entrada}
+                        onChangeText={v => handleChange(caseta.Nombre, 'entrada', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Mortalidad</Text>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={datos.mortalidad}
+                        onChangeText={v => handleChange(caseta.Nombre, 'mortalidad', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Salida</Text>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={datos.salida}
+                        onChangeText={v => handleChange(caseta.Nombre, 'salida', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Edad</Text>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={datos.edad}
+                        onChangeText={v => handleChange(caseta.Nombre, 'edad', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Existencia Final</Text>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={datos.existenciaFinal}
+                        editable={false}
+                        placeholder="0"
+                      />
+                    </View>
                   </View>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Entrada</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta].entrada}
-                      onChangeText={v => handleChange(caseta, 'entrada', v)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Mortalidad</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta].mortalidad}
-                      onChangeText={v => handleChange(caseta, 'mortalidad', v)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Salida</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta].salida}
-                      onChangeText={v => handleChange(caseta, 'salida', v)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Edad</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta].edad}
-                      onChangeText={v => handleChange(caseta, 'edad', v)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Existencia Final</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta].existenciaFinal}
-                      onChangeText={v => handleChange(caseta, 'existenciaFinal', v)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                </View>
-              )}
-            </View>
-          ))}
+                )}
+              </View>
+            );
+          })}
           {/* Totales generales */}
           <View style={styles.totalesBlock}>
             <Text style={styles.totalesTitle}>Totales</Text>

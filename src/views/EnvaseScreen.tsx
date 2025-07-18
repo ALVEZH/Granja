@@ -6,12 +6,14 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useCasetas } from '../hooks/useCasetas';
+import { useGranjas } from '../hooks/useGranjas';
 
 // CONTEXTO GLOBAL DE SECCIÓN
 
 export const SeccionContext = createContext<{
-  seccionSeleccionada: string | null;
-  setSeccionSeleccionada: (s: string | null) => void;
+  seccionSeleccionada: any;
+  setSeccionSeleccionada: (s: any) => void;
 }>({
   seccionSeleccionada: null,
   setSeccionSeleccionada: () => {},
@@ -121,8 +123,9 @@ export default function EnvaseScreen() {
           tabla[envase].existenciaFinal
         ) {
           const data: any = {
-            caseta: seccionSeleccionada, // Siempre usa el valor del contexto
+            caseta: seccionSeleccionada?.Nombre || '',
             fecha: fechaHoy,
+            granja_id: (seccionSeleccionada as any)?.GranjaID ?? null,
             tipo: envase,
             inicial: Number(tabla[envase].existenciaInicial) || 0,
             recibido: Number(tabla[envase].recibido) || 0,
@@ -154,6 +157,14 @@ export default function EnvaseScreen() {
     setEnvasesAbiertos(prev => ({ ...prev, [envase]: !prev[envase] }));
   };
 
+  // Obtener GranjaID de la seccion seleccionada (asumiendo que seccionSeleccionada es un objeto con GranjaID y Nombre)
+  // Ajuste temporal para soportar string u objeto
+  const granjaId = (seccionSeleccionada as any)?.GranjaID ?? null;
+  const { casetas, loading: loadingCasetas, error: errorCasetas } = useCasetas(granjaId);
+
+  // Filtrar solo las casetas de la granja seleccionada (por si la API no lo hace)
+  const casetasFiltradas = casetas?.filter(c => c.GranjaID === granjaId) ?? [];
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
@@ -177,7 +188,7 @@ export default function EnvaseScreen() {
               style={styles.headerImage}
               resizeMode="contain"
             />
-            <Text style={styles.subtitle}>{seccionSeleccionada} - {fechaHoy}</Text>
+            <Text style={styles.subtitle}>{seccionSeleccionada?.Nombre} - {fechaHoy}</Text>
           </View>
           {envases.map((envase, idx) => (
             <View key={envase} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>

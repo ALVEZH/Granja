@@ -7,13 +7,16 @@ import {
   SafeAreaView,
   Image,
   ScrollView,
+  Alert,
 } from 'react-native';
 
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { useSeccion } from './EnvaseScreen';
+import { fetchFromDynamicApi } from '../services/dinamicApi';
 
 type MenuScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -22,6 +25,7 @@ type MenuScreenNavigationProp = NativeStackNavigationProp<
 
 export default function MenuScreen() {
   const navigation = useNavigation<MenuScreenNavigationProp>();
+  const { seccionSeleccionada } = useSeccion();
   // Estado local para marcar vistas llenadas
   const [completado, setCompletado] = useState({
     Produccion: false,
@@ -30,11 +34,18 @@ export default function MenuScreen() {
     Envase: false,
   });
 
-  // Función para navegar y marcar como completado al volver
-  const navegarYCompletar = (vista: keyof typeof completado) => {
-    navigation.navigate(vista as any, {
-      onGoBack: () => setCompletado(prev => ({ ...prev, [vista]: true })),
-    });
+  // Actualizar estado de completado al volver al menú (puedes personalizar la lógica)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Aquí podrías revisar si hay datos guardados en la base de datos/local storage
+      // y actualizar el estado de completado en consecuencia.
+      // Por ahora, no se marca automáticamente nada como completado.
+    }, [])
+  );
+
+  // Navegación simple, sin pasar funciones en los params
+  const navegar = (vista: keyof typeof completado) => {
+    navigation.navigate(vista as any);
   };
 
   return (
@@ -49,12 +60,16 @@ export default function MenuScreen() {
         <Text style={styles.title}>Menú</Text>
         <View style={{ width: 40 }} />
       </View>
+      {/* Texto de sección actual */}
+      <Text style={{ textAlign: 'center', color: '#517aa2', fontSize: 16, marginBottom: 10 }}>
+        Estás en la sección: <Text style={{ fontWeight: 'bold' }}>{seccionSeleccionada?.Nombre || ''}</Text>
+      </Text>
       <ScrollView contentContainerStyle={styles.container}>
         {/* <Text style={styles.title}>Menú</Text> */}
 
         <TouchableOpacity
           style={styles.listButton}
-          onPress={() => navegarYCompletar('Produccion')}
+          onPress={() => navegar('Produccion')}
         >
           <Image
             source={require('../../assets/Iconos/produccion.png')}
@@ -67,7 +82,7 @@ export default function MenuScreen() {
 
         <TouchableOpacity
           style={styles.listButton}
-          onPress={() => navegarYCompletar('Alimento')}
+          onPress={() => navegar('Alimento')}
         >
           <Image
             source={require('../../assets/Iconos/alimento.png')}
@@ -80,7 +95,7 @@ export default function MenuScreen() {
 
         <TouchableOpacity
           style={styles.listButton}
-          onPress={() => navegarYCompletar('Existencia')}
+          onPress={() => navegar('Existencia')}
         >
           <Image
             source={require('../../assets/Iconos/existencia.png')}
@@ -93,7 +108,7 @@ export default function MenuScreen() {
 
         <TouchableOpacity
           style={styles.listButton}
-          onPress={() => navegarYCompletar('Envase')}
+          onPress={() => navegar('Envase')}
         >
           <Image
             source={require('../../assets/Iconos/envase.png')}

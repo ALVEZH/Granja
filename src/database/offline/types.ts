@@ -3,6 +3,7 @@ export interface ProduccionData {
   id?: number
   caseta: string
   fecha: string
+  granja_id: number
   blanco_cajas: number
   blanco_restos: number
   roto1_cajas: number
@@ -28,6 +29,7 @@ export interface AlimentoData {
   id?: number
   caseta: string
   fecha: string
+  granja_id: number
   existencia_inicial: number
   entrada: number
   consumo: number
@@ -40,6 +42,7 @@ export interface ExistenciaData {
   id?: number
   caseta: string
   fecha: string
+  granja_id: number
   inicial: number
   entrada: number
   mortalidad: number
@@ -53,6 +56,7 @@ export interface EnvaseData {
   id?: number
   caseta: string
   fecha: string
+  granja_id: number
   tipo: string
   inicial: number
   recibido: number

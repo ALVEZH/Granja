@@ -7,8 +7,15 @@ class DatabaseManager {
   async init(): Promise<void> {
     try {
       this.db = await SQLite.openDatabaseAsync("granja.db")
-      await this.db.execAsync(createTables)
-      
+      if (!this.db) {
+        throw new Error("No se pudo abrir la base de datos. El objeto db es null.")
+      }
+      try {
+        await this.db.execAsync(createTables)
+      } catch (sqlError) {
+        console.error("Error ejecutando createTables:", sqlError)
+        throw sqlError
+      }
       // Migración para agregar columna edad a la tabla existencia
       try {
         await this.db.execAsync("ALTER TABLE existencia ADD COLUMN edad INTEGER DEFAULT 0")
@@ -17,11 +24,10 @@ class DatabaseManager {
         // Si la columna ya existe, ignorar el error
         console.log("Columna edad ya existe en tabla existencia")
       }
-      
       console.log("Base de datos inicializada correctamente")
     } catch (error) {
       console.error("Error al inicializar la base de datos:", error)
-      throw error
+      // No relanzar el error para evitar que la app crashee
     }
   }
 
