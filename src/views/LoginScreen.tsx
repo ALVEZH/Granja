@@ -15,13 +15,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { fetchFromDynamicApi } from '../services/dinamicApi'; // ajusta el path si es necesario
-
+import { useLogin } from '../hooks/useLogin';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
+  const { login, loading } = useLogin();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,30 +29,38 @@ export default function LoginScreen() {
 
   const toggleSecureText = () => setSecureText(!secureText);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Ambos campos son obligatorios.', 'Completa los campos para continuar.');
+      Alert.alert('Campos requeridos', 'Completa todos los campos para continuar.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Correo electrónico inválido.');
+      Alert.alert('Correo inválido', 'El formato del correo electrónico es incorrecto.');
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres.');
+    if (password.length < 3) {
+      Alert.alert('Contraseña inválida', 'La contraseña debe tener al menos 6 caracteres.');
       return;
     }
 
-    if (email === 'encargadoalze@gmail.com' && password === 'Encargadoalze09') {
-      navigation.replace('SeleccionSeccion');
-    } else {
-      Alert.alert('Error', 'Correo o contraseña incorrectos, inténtale de nuevo.');
+    try {
+      const usuario = await login(email, password);
+
+      if (usuario) {
+        Alert.alert("Éxito", "Inicio de sesión exitoso.");
+        navigation.replace('SeleccionSeccion');
+      } else {
+        Alert.alert("Error", "Correo o contraseña incorrectos.");
+      }
+    } catch (error) {
+      Alert.alert('Error del servidor', 'No se pudo validar el usuario. Intenta más tarde.');
     }
   };
 
+  
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -68,7 +76,7 @@ export default function LoginScreen() {
               <Text style={styles.label}>Correo electrónico</Text>
               <TextInput
                 style={styles.input}
-                placeholder="correoelectronico@gmail.com"
+                placeholder="correo@ejemplo.com"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}

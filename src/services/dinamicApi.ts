@@ -1,26 +1,38 @@
-// src/api/dynamicApi.js
+// src/api/dynamicApi.ts
+
+type ConexionParams = {
+  user: string;
+  password: string;
+  server: string;
+  database: string;
+};
+
+type FetchParams = {
+  metodo: string;
+  tipo?: string;        // 'tabla', 'vista', 'procedimiento', etc.
+  operacion?: string;   // 'consultar', 'insertar', etc.
+  data?: any;           // Puede ser objeto o array, según el uso
+};
 
 export const fetchFromDynamicApi = async ({
   metodo,
   tipo = 'tabla',
   operacion = 'consultar',
-  data = null    // ← añadimos este parámetro
-}) => {
-  // Montamos el body siempre con conexion, dbName, metodo, tipo y operacion...
-  const payload = {
+  data = null
+}: FetchParams): Promise<any> => {
+  const payload: any = {
     conexion: {
-      user: "usuariobd",
-      password: "Alv3z.DBusr2001",
+      user: "usrAPPpostura",
+      password: "USR78_pp@qa",
       server: "94.130.131.16",
-      database: "ALZEPROD"
+      database: "ALZEposturaD"
     },
-    dbName: "ALZEPROD",
+    dbName: "ALZEposturaD",
     metodo,
     tipo,
     operacion
   };
 
-  // …y si nos pasaron un objeto o un array en `data`, lo inyectamos:
   if (data !== null) {
     payload.data = data;
   }
@@ -39,4 +51,3 @@ export const fetchFromDynamicApi = async ({
   const { resultado } = await response.json();
   return resultado;
 };
-
