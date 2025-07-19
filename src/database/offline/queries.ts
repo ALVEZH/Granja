@@ -49,17 +49,55 @@ export class DatabaseQueries {
   }
 
   static async getProduccionByFecha(fecha: string, granja_id: number): Promise<ProduccionData[]> {
-    const db = dbManager.getDatabase()
-    const query = "SELECT * FROM produccion WHERE fecha = ? AND granja_id = ? ORDER BY caseta"
-    const result = await db.getAllAsync(query, [fecha, granja_id])
-    return result as ProduccionData[]
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para getProduccionByFecha:", e);
+      return [];
+    }
+    try {
+      const query = "SELECT * FROM produccion WHERE fecha = ? AND granja_id = ? ORDER BY caseta"
+      const result = await db.getAllAsync(query, [fecha, granja_id])
+      return result as ProduccionData[]
+    } catch (error) {
+      console.error("Error al obtener producción por fecha:", error);
+      return [];
+    }
   }
 
   static async getAllProduccion(): Promise<ProduccionData[]> {
-    const db = dbManager.getDatabase()
-    const query = "SELECT * FROM produccion ORDER BY fecha DESC, caseta"
-    const result = await db.getAllAsync(query)
-    return result as ProduccionData[]
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para getAllProduccion:", e);
+      return [];
+    }
+    try {
+      const query = "SELECT * FROM produccion ORDER BY fecha DESC, caseta"
+      const result = await db.getAllAsync(query)
+      return result as ProduccionData[]
+    } catch (error) {
+      console.error("Error al obtener toda la producción:", error);
+      return [];
+    }
+  }
+
+  static async deleteProduccionByFecha(fecha: string, granja_id: number): Promise<void> {
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para deleteProduccionByFecha:", e);
+      return;
+    }
+    try {
+      const query = "DELETE FROM produccion WHERE fecha = ? AND granja_id = ?"
+      await db.runAsync(query, [fecha, granja_id])
+    } catch (error) {
+      console.error("Error al eliminar producción por fecha:", error);
+    }
   }
 
   // ALIMENTO
@@ -93,10 +131,21 @@ export class DatabaseQueries {
   }
 
   static async getAlimentoByFecha(fecha: string, granja_id: number): Promise<AlimentoData[]> {
-    const db = dbManager.getDatabase()
-    const query = "SELECT * FROM alimento WHERE fecha = ? AND granja_id = ? ORDER BY caseta"
-    const result = await db.getAllAsync(query, [fecha, granja_id])
-    return result as AlimentoData[]
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para getAlimentoByFecha:", e);
+      return [];
+    }
+    try {
+      const query = "SELECT * FROM alimento WHERE fecha = ? AND granja_id = ? ORDER BY caseta"
+      const result = await db.getAllAsync(query, [fecha, granja_id])
+      return result as AlimentoData[]
+    } catch (error) {
+      console.error("Error al obtener alimento por fecha:", error);
+      return [];
+    }
   }
 
   // EXISTENCIA
@@ -131,10 +180,21 @@ export class DatabaseQueries {
   }
 
   static async getExistenciaByFecha(fecha: string, granja_id: number): Promise<ExistenciaData[]> {
-    const db = dbManager.getDatabase()
-    const query = "SELECT * FROM existencia WHERE fecha = ? AND granja_id = ? ORDER BY caseta"
-    const result = await db.getAllAsync(query, [fecha, granja_id])
-    return result as ExistenciaData[]
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para getExistenciaByFecha:", e);
+      return [];
+    }
+    try {
+      const query = "SELECT * FROM existencia WHERE fecha = ? AND granja_id = ? ORDER BY caseta"
+      const result = await db.getAllAsync(query, [fecha, granja_id])
+      return result as ExistenciaData[]
+    } catch (error) {
+      console.error("Error al obtener existencia por fecha:", error);
+      return [];
+    }
   }
 
   // ENVASE
@@ -168,35 +228,67 @@ export class DatabaseQueries {
   }
 
   static async getEnvaseByFecha(fecha: string, granja_id: number): Promise<EnvaseData[]> {
-    const db = dbManager.getDatabase()
-    const query = "SELECT * FROM envase WHERE fecha = ? AND granja_id = ? ORDER BY caseta"
-    const result = await db.getAllAsync(query, [fecha, granja_id])
-    return result as EnvaseData[]
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para getEnvaseByFecha:", e);
+      return [];
+    }
+    try {
+      const query = "SELECT * FROM envase WHERE fecha = ? AND granja_id = ? ORDER BY caseta"
+      const result = await db.getAllAsync(query, [fecha, granja_id])
+      return result as EnvaseData[]
+    } catch (error) {
+      console.error("Error al obtener envase por fecha:", error);
+      return [];
+    }
   }
 
   // UTILIDADES
   static async clearAllData(): Promise<void> {
-    const db = dbManager.getDatabase()
-    await db.runAsync("DELETE FROM produccion")
-    await db.runAsync("DELETE FROM alimento")
-    await db.runAsync("DELETE FROM existencia")
-    await db.runAsync("DELETE FROM envase")
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para clearAllData:", e);
+      return;
+    }
+    try {
+      await db.runAsync("DELETE FROM produccion")
+      await db.runAsync("DELETE FROM alimento")
+      await db.runAsync("DELETE FROM existencia")
+      await db.runAsync("DELETE FROM envase")
+    } catch (error) {
+      console.error("Error al limpiar datos:", error);
+    }
   }
 
   static async getFechasDisponibles(): Promise<string[]> {
-    const db = dbManager.getDatabase()
-    const query = `
-      SELECT DISTINCT fecha FROM (
-        SELECT fecha FROM produccion
-        UNION
-        SELECT fecha FROM alimento
-        UNION
-        SELECT fecha FROM existencia
-        UNION
-        SELECT fecha FROM envase
-      ) ORDER BY fecha DESC
-    `
-    const result = await db.getAllAsync(query)
-    return result.map((row: any) => row.fecha)
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para getFechasDisponibles:", e);
+      return [];
+    }
+    try {
+      const query = `
+        SELECT DISTINCT fecha FROM (
+          SELECT fecha FROM produccion
+          UNION
+          SELECT fecha FROM alimento
+          UNION
+          SELECT fecha FROM existencia
+          UNION
+          SELECT fecha FROM envase
+        ) ORDER BY fecha DESC
+      `
+      const result = await db.getAllAsync(query)
+      return result.map((row: any) => row.fecha)
+    } catch (error) {
+      console.error("Error al obtener fechas disponibles:", error);
+      return [];
+    }
   }
 }

@@ -12,21 +12,31 @@ type FetchParams = {
   tipo?: string;        // 'tabla', 'vista', 'procedimiento', etc.
   operacion?: string;   // 'consultar', 'insertar', etc.
   data?: any;           // Puede ser objeto o array, según el uso
+  usarAdmin?: boolean;  // true para usar usrBDpostura, false para usrAPPpostura
 };
 
 export const fetchFromDynamicApi = async ({
   metodo,
   tipo = 'tabla',
   operacion = 'consultar',
-  data = null
+  data = null,
+  usarAdmin = false
 }: FetchParams): Promise<any> => {
+  // Seleccionar credenciales según el tipo de operación
+  const credenciales = usarAdmin ? {
+    user: "usrBDpostura",
+    password: "USR45_bd@qa",
+    server: "94.130.131.16",
+    database: "ALZEposturaD"
+  } : {
+    user: "usrAPPpostura",
+    password: "USR78_pp@qa",
+    server: "94.130.131.16",
+    database: "ALZEposturaD"
+  };
+
   const payload: any = {
-    conexion: {
-      user: "usrAPPpostura",
-      password: "USR78_pp@qa",
-      server: "94.130.131.16",
-      database: "ALZEposturaD"
-    },
+    conexion: credenciales,
     dbName: "ALZEposturaD",
     metodo,
     tipo,

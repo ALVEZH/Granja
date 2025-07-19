@@ -16,7 +16,6 @@ import { RootStackParamList } from '../navigation/types';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useSeccion } from './EnvaseScreen';
-import { fetchFromDynamicApi } from '../services/dinamicApi';
 
 type MenuScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -64,9 +63,8 @@ export default function MenuScreen() {
       <Text style={{ textAlign: 'center', color: '#517aa2', fontSize: 16, marginBottom: 10 }}>
         Estás en la sección: <Text style={{ fontWeight: 'bold' }}>{seccionSeleccionada?.Nombre || ''}</Text>
       </Text>
+      
       <ScrollView contentContainerStyle={styles.container}>
-        {/* <Text style={styles.title}>Menú</Text> */}
-
         <TouchableOpacity
           style={styles.listButton}
           onPress={() => navegar('Produccion')}
@@ -119,7 +117,7 @@ export default function MenuScreen() {
           {completado.Envase && <Ionicons name="checkmark-circle" size={24} color="limegreen" style={styles.checkIcon} />}
         </TouchableOpacity>
 
-        {/* NUEVO BOTÓN PARA LA VISTA RESUMEN */}
+        {/* BOTÓN PARA LA VISTA RESUMEN */}
         <TouchableOpacity
           style={styles.listButton}
           onPress={() => navigation.navigate('ResumenSeccion')}

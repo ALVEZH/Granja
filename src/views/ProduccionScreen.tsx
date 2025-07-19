@@ -50,41 +50,76 @@ export default function ProduccionScreen() {
   // Estructura: { [caseta]: { [tipo]: { cajas: string, restos: string } } }
   const [tabla, setTabla] = useState<Record<string, CasetaProduccion>>({});
 
-  // Sincronizar tabla cuando cambian las casetasFiltradas
+  // Cargar datos existentes cuando cambian las casetas o la fecha
   useEffect(() => {
-    if (!casetasFiltradas) return;
-    setTabla(prev => {
-      let changed = false;
-      const obj: Record<string, CasetaProduccion> = { ...prev };
-      // Agregar nuevas casetas
-      casetasFiltradas.forEach(caseta => {
-        if (!obj[caseta.Nombre]) {
-          changed = true;
-          obj[caseta.Nombre] = {};
-          tiposHuevo.forEach(tipo => {
-            obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
-          });
-        } else {
-          tiposHuevo.forEach(tipo => {
-            if (!obj[caseta.Nombre][tipo]) {
-              changed = true;
+    if (!casetasFiltradas || !granjaId) return;
+    
+    const cargarDatosExistentes = async () => {
+      try {
+        const datosExistentes = await DatabaseQueries.getProduccionByFecha(fechaHoy, granjaId);
+        
+        setTabla(prev => {
+          const obj: Record<string, CasetaProduccion> = {};
+          
+          // Inicializar todas las casetas con datos vacíos
+          casetasFiltradas.forEach(caseta => {
+            obj[caseta.Nombre] = {};
+            tiposHuevo.forEach(tipo => {
               obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
+            });
+          });
+          
+          // Cargar datos existentes
+          datosExistentes.forEach(registro => {
+            if (obj[registro.caseta]) {
+              obj[registro.caseta]['BLANCO'] = { 
+                cajas: registro.blanco_cajas?.toString() || '', 
+                restos: registro.blanco_restos?.toString() || '' 
+              };
+              obj[registro.caseta]['ROTO 1'] = { 
+                cajas: registro.roto1_cajas?.toString() || '', 
+                restos: registro.roto1_restos?.toString() || '' 
+              };
+              obj[registro.caseta]['ROTO 2'] = { 
+                cajas: registro.roto2_cajas?.toString() || '', 
+                restos: registro.roto2_restos?.toString() || '' 
+              };
+              obj[registro.caseta]['MANCHADO'] = { 
+                cajas: registro.manchado_cajas?.toString() || '', 
+                restos: registro.manchado_restos?.toString() || '' 
+              };
+              obj[registro.caseta]['FRAGIL 1'] = { 
+                cajas: registro.fragil1_cajas?.toString() || '', 
+                restos: registro.fragil1_restos?.toString() || '' 
+              };
+              obj[registro.caseta]['FRAGIL 2'] = { 
+                cajas: registro.fragil2_cajas?.toString() || '', 
+                restos: registro.fragil2_restos?.toString() || '' 
+              };
+              obj[registro.caseta]['YEMA'] = { 
+                cajas: registro.yema_cajas?.toString() || '', 
+                restos: registro.yema_restos?.toString() || '' 
+              };
+              obj[registro.caseta]['B1'] = { 
+                cajas: registro.b1_cajas?.toString() || '', 
+                restos: registro.b1_restos?.toString() || '' 
+              };
+              obj[registro.caseta]['EXTRA 240PZS'] = { 
+                cajas: registro.extra240_cajas?.toString() || '', 
+                restos: registro.extra240_restos?.toString() || '' 
+              };
             }
           });
-        }
-      });
-      // Eliminar casetas que ya no existen
-      Object.keys(obj).forEach(nombre => {
-        if (!casetasFiltradas.find(c => c.Nombre === nombre)) {
-          changed = true;
-          delete obj[nombre];
-        }
-      });
-      // Solo actualizar si hubo cambios
-      if (changed) return obj;
-      return prev;
-    });
-  }, [JSON.stringify(casetasFiltradas)]);
+          
+          return obj;
+        });
+      } catch (error) {
+        console.error('Error cargando datos existentes:', error);
+      }
+    };
+    
+    cargarDatosExistentes();
+  }, [casetasFiltradas.length, granjaId, fechaHoy]);
 
   // Calcular totales por tipo
   const totales = useMemo(() => {
@@ -98,7 +133,7 @@ export default function ProduccionScreen() {
       t[tipo] = { cajas, restos };
     });
     return t;
-  }, [tabla, casetasFiltradas]);
+  }, [tabla, casetasFiltradas.length]);
 
   // Manejar cambios en la tabla
   const handleChange = (caseta: string, tipo: string, campo: 'cajas' | 'restos', valor: string) => {
@@ -115,11 +150,23 @@ export default function ProduccionScreen() {
   };
 
   // Estado para controlar qué casetas están abiertas
-  const [casetasAbiertas, setCasetasAbiertas] = useState<{ [caseta: string]: boolean }>(() => {
-    const obj: { [caseta: string]: boolean } = {};
-    casetasFiltradas.forEach(c => { obj[c.Nombre] = false; });
-    return obj;
-  });
+  const [casetasAbiertas, setCasetasAbiertas] = useState<{ [caseta: string]: boolean }>({});
+
+  // Inicializar casetas abiertas cuando cambian las casetas filtradas
+  useEffect(() => {
+    if (!casetasFiltradas) return;
+    setCasetasAbiertas(prev => {
+      const obj: { [caseta: string]: boolean } = { ...prev };
+      let changed = false;
+      casetasFiltradas.forEach(c => {
+        if (!(c.Nombre in obj)) {
+          obj[c.Nombre] = false;
+          changed = true;
+        }
+      });
+      return changed ? obj : prev;
+    });
+  }, [casetasFiltradas.length]);
 
   const toggleCaseta = (caseta: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -166,6 +213,48 @@ export default function ProduccionScreen() {
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar los datos.');
     }
+  };
+
+  // Eliminar datos de la fecha actual
+  const handleEliminarDatos = async () => {
+    if (!seccionSeleccionada) {
+      Alert.alert('Error', 'No se ha seleccionado una sección.');
+      return;
+    }
+
+    Alert.alert(
+      'Eliminar datos',
+      `¿Estás seguro de que quieres eliminar todos los datos de producción de la sección "${seccionSeleccionada?.Nombre}" para la fecha ${fechaHoy}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Eliminar datos de producción de la fecha actual
+              await DatabaseQueries.deleteProduccionByFecha(fechaHoy, granjaId);
+              
+              // Limpiar la tabla en pantalla
+              setTabla(prev => {
+                const obj: Record<string, CasetaProduccion> = {};
+                casetasFiltradas.forEach(caseta => {
+                  obj[caseta.Nombre] = {};
+                  tiposHuevo.forEach(tipo => {
+                    obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
+                  });
+                });
+                return obj;
+              });
+              
+              Alert.alert('Éxito', 'Datos eliminados correctamente.');
+            } catch (error) {
+              Alert.alert('Error', 'No se pudieron eliminar los datos.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -253,6 +342,13 @@ export default function ProduccionScreen() {
           </View>
           <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
             <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.btnGuardar, { backgroundColor: '#d9534f', marginTop: 8 }]} 
+            onPress={handleEliminarDatos}
+          >
+            <Text style={styles.btnGuardarText}>Eliminar datos de hoy</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

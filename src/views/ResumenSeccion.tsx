@@ -8,6 +8,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useCasetas } from '../hooks/useCasetas';
+import { useProduccionSync } from '../hooks/useProduccionSync';
 
 const columnasProduccion = [
   { label: 'BLANCO', key: 'blanco' },
@@ -50,6 +51,9 @@ export default function ResumenSeccion() {
   const granjaId = seccionSeleccionada?.GranjaID ?? null;
   const { casetas } = useCasetas(granjaId);
   const casetasFiltradas = casetas?.filter(c => c.GranjaID === granjaId) ?? [];
+
+  // Hook para sincronización
+  const { isSyncing, syncStatus, syncProduccionData } = useProduccionSync();
 
   useEffect(() => {
     if (!granjaId) return;
@@ -226,6 +230,32 @@ export default function ResumenSeccion() {
     } catch (error) {
       Alert.alert('Error', 'No se pudieron eliminar los datos.');
     }
+  };
+
+  const handleSincronizarProduccion = async () => {
+    if (!granjaId) {
+      Alert.alert('Error', 'No hay sección seleccionada');
+      return;
+    }
+
+    Alert.alert(
+      'Sincronizar Producción',
+      `¿Deseas sincronizar los datos de producción de la sección "${seccionSeleccionada?.Nombre}" para la fecha ${fecha}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sincronizar',
+          onPress: async () => {
+            try {
+              await syncProduccionData(granjaId, fecha);
+              Alert.alert('Éxito', syncStatus || 'Sincronización completada');
+            } catch (error) {
+              Alert.alert('Error', `Error en sincronización: ${error}`);
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -466,6 +496,23 @@ export default function ResumenSeccion() {
           <Ionicons name="trash" size={24} color="#fff" style={{ marginRight: 10 }} />
           <Text style={styles.btnExportarText}>Eliminar datos</Text>
         </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.btnExportar, { backgroundColor: '#28a745', marginTop: 0 }]} 
+          onPress={handleSincronizarProduccion}
+          disabled={isSyncing}
+        >
+          <Ionicons name="cloud-upload" size={24} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.btnExportarText}>
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar Producción'}
+          </Text>
+        </TouchableOpacity>
+        
+        {syncStatus ? (
+          <View style={{ padding: 10, margin: 16, backgroundColor: '#f8f9fa', borderRadius: 8, borderWidth: 1, borderColor: '#dee2e6' }}>
+            <Text style={{ fontSize: 14, color: '#6c757d', textAlign: 'center' }}>{syncStatus}</Text>
+          </View>
+        ) : null}
         {/* Inputs de firmas y nombres eliminados */}
       </ScrollView>
     </SafeAreaView>
@@ -473,7 +520,7 @@ export default function ResumenSeccion() {
 }
 
 // Cambia los estilos de las tablas y celdas para mejor alineación y legibilidad
-const COL_WIDTH = 90;
+const COL_WIDTH = 80; // Ancho más compacto para que quepan todas las columnas
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
   headerSafeArea: {
