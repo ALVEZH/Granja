@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation, KeyboardAvoidingView } from 'react-native';
 import { DatabaseQueries } from '../database/offline/queries';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useSeccion } from './EnvaseScreen';
@@ -133,7 +133,7 @@ export default function ProduccionScreen() {
       t[tipo] = { cajas, restos };
     });
     return t;
-  }, [tabla, casetasFiltradas.length]);
+  }, [tabla, casetasFiltradas]); // Asegurar que se recalcula si cambian las casetas
 
   // Manejar cambios en la tabla
   const handleChange = (caseta: string, tipo: string, campo: 'cajas' | 'restos', valor: string) => {
@@ -173,12 +173,73 @@ export default function ProduccionScreen() {
     setCasetasAbiertas(prev => ({ ...prev, [caseta]: !prev[caseta] }));
   };
 
+  // Estado para saber si los datos ya se guardaron
+  const [guardado, setGuardado] = useState(false);
+
+  // Bloquear navegación por el botón de la flecha si no se ha guardado
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBeforeRemove = (e: any) => {
+        if (guardado) return;
+        e.preventDefault();
+        Alert.alert(
+          '¡Atención!',
+          'Debes guardar los datos antes de salir de la pantalla de producción.',
+          [
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      };
+      navigation.addListener('beforeRemove', onBeforeRemove);
+      return () => navigation.removeListener('beforeRemove', onBeforeRemove);
+    }, [guardado, navigation])
+  );
+
+  // 2. Función para verificar si una caseta está completa
+  const isCasetaCompleta = (casetaNombre: string) => {
+    const datosCaseta = tabla[casetaNombre] || {};
+    // Una caseta está completa si TODOS los tipos tienen cajas y restos NO vacíos y NO son cero
+    return tiposHuevo.every(tipo => {
+      const datosTipo = datosCaseta[tipo] || { cajas: '', restos: '' };
+      return (
+        datosTipo.cajas !== '' && datosTipo.cajas !== '0' &&
+        datosTipo.restos !== '' && datosTipo.restos !== '0'
+      );
+    });
+  };
+
   // Guardar datos en la base de datos
   const handleGuardar = async () => {
     if (!seccionSeleccionada) {
       Alert.alert('Error', 'No se ha seleccionado una sección.');
       return;
     }
+    // Verificar si hay casetas incompletas
+    const casetasIncompletas = casetasFiltradas.filter(c => !isCasetaCompleta(c.Nombre));
+    if (casetasIncompletas.length > 0) {
+      Alert.alert(
+        'Faltan casetas por rellenar',
+        'Hay casetas que no están completamente llenas. ¿Seguro que quieres continuar?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Continuar',
+            style: 'destructive',
+            onPress: () => guardarProduccion(true)
+          }
+        ]
+      );
+      return;
+    }
+    await guardarProduccion(false);
+  };
+
+  // Función auxiliar para guardar los datos
+  // Solo permite guardar una vez por click
+  const [guardando, setGuardando] = useState(false);
+  const guardarProduccion = async (forzar: boolean) => {
+    if (guardando) return;
+    setGuardando(true);
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
       for (const caseta of casetasFiltradas || []) {
@@ -208,10 +269,13 @@ export default function ProduccionScreen() {
         console.log('Guardando producción:', data);
         await DatabaseQueries.insertProduccion(data);
       }
+      setGuardado(true);
       Alert.alert('Éxito', 'Datos de producción guardados correctamente.');
       navigation.replace('Menu');
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar los datos.');
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -257,6 +321,12 @@ export default function ProduccionScreen() {
     );
   };
 
+  // 1. Mantener los datos en memoria mientras navegas entre vistas
+  // (No se hace nada, ya que el estado se mantiene mientras la app no se recargue o cierre)
+  // Si quieres persistencia incluso al cerrar la app, se puede agregar AsyncStorage.
+
+  // Solo poner en verde las casetas completas (ya está en el render)
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
@@ -286,45 +356,55 @@ export default function ProduccionScreen() {
           {errorCasetas && <Text style={{ color: 'red' }}>{errorCasetas}</Text>}
           {casetasFiltradas.map((caseta, idx) => {
             const datosCaseta = tabla[caseta.Nombre] || {};
+            const completa = isCasetaCompleta(caseta.Nombre);
             return (
-              <View key={caseta.Nombre} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
+              <View
+                key={caseta.Nombre}
+                style={[
+                  styles.casetaBlock,
+                  idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd,
+                  completa && { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
+                ]}
+              >
                 <TouchableOpacity onPress={() => toggleCaseta(caseta.Nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
                   <Text style={styles.casetaTitle}>{caseta.Nombre}</Text>
                   <Text style={styles.caret}>{casetasAbiertas[caseta.Nombre] ? '\u25b2' : '\u25bc'}</Text>
                 </TouchableOpacity>
                 {casetasAbiertas[caseta.Nombre] && (
-                  <View style={styles.casetaContent}>
-                    {tiposHuevo.map(tipo => {
-                      const datosTipo = (datosCaseta && datosCaseta[tipo]) ? datosCaseta[tipo] : { cajas: '', restos: '' };
-                      return (
-                        <View key={tipo} style={styles.tipoRow}>
-                          <Text style={styles.tipoLabel}>{tipo}</Text>
-                          <View style={styles.inputGroup}>
-                            <View style={styles.inputPair}>
-                              <Text style={styles.inputLabel}>Cajas</Text>
-                              <TextInput
-                                style={styles.inputCell}
-                                value={datosTipo.cajas}
-                                onChangeText={v => handleChange(caseta.Nombre, tipo, 'cajas', v)}
-                                keyboardType="numeric"
-                                placeholder="0"
-                              />
-                            </View>
-                            <View style={styles.inputPair}>
-                              <Text style={styles.inputLabel}>Restos</Text>
-                              <TextInput
-                                style={styles.inputCell}
-                                value={datosTipo.restos}
-                                onChangeText={v => handleChange(caseta.Nombre, tipo, 'restos', v)}
-                                keyboardType="numeric"
-                                placeholder="0"
-                              />
+                  <ScrollView horizontal contentContainerStyle={styles.casetaContent} showsHorizontalScrollIndicator={false}>
+                    <View>
+                      {tiposHuevo.map(tipo => {
+                        const datosTipo = (datosCaseta && datosCaseta[tipo]) ? datosCaseta[tipo] : { cajas: '', restos: '' };
+                        return (
+                          <View key={tipo} style={styles.tipoRow}>
+                            <Text style={styles.tipoLabel}>{tipo}</Text>
+                            <View style={styles.inputGroup}>
+                              <View style={styles.inputPair}>
+                                <Text style={styles.inputLabel}>Cajas</Text>
+                                <TextInput
+                                  style={styles.inputCell}
+                                  value={datosTipo.cajas}
+                                  onChangeText={v => handleChange(caseta.Nombre, tipo, 'cajas', v)}
+                                  keyboardType="numeric"
+                                  placeholder="0"
+                                />
+                              </View>
+                              <View style={styles.inputPair}>
+                                <Text style={styles.inputLabel}>Restos</Text>
+                                <TextInput
+                                  style={styles.inputCell}
+                                  value={datosTipo.restos}
+                                  onChangeText={v => handleChange(caseta.Nombre, tipo, 'restos', v)}
+                                  keyboardType="numeric"
+                                  placeholder="0"
+                                />
+                              </View>
                             </View>
                           </View>
-                        </View>
-                      );
-                    })}
-                  </View>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
                 )}
               </View>
             );
@@ -342,13 +422,6 @@ export default function ProduccionScreen() {
           </View>
           <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
             <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.btnGuardar, { backgroundColor: '#d9534f', marginTop: 8 }]} 
-            onPress={handleEliminarDatos}
-          >
-            <Text style={styles.btnGuardarText}>Eliminar datos de hoy</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -396,14 +469,24 @@ const styles = StyleSheet.create({
   casetaContent: { padding: 10 },
   tipoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   tipoLabel: { width: 100, fontWeight: '600', color: '#3b3b3b', fontSize: 13 },
-  inputGroup: { flexDirection: 'row', gap: 10 },
-  inputPair: { flexDirection: 'column', alignItems: 'center', marginRight: 10 },
+  inputGroup: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 4,
+  },
+  inputPair: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    marginRight: 20, // Espacio suficiente entre los inputs
+  },
   inputLabel: { fontSize: 11, color: '#666', marginBottom: 2 },
   inputCell: {
     borderWidth: 1.5,
     borderColor: '#b0b8c1',
     borderRadius: 8,
-    width: 60,
+    width: 90, // suficiente para 6 dígitos
     height: 40,
     margin: 4,
     paddingHorizontal: 12,

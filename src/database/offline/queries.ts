@@ -109,24 +109,71 @@ export class DatabaseQueries {
       console.error("No se pudo obtener la base de datos para insertAlimento:", e);
       return;
     }
-    const query = `
-      INSERT OR REPLACE INTO alimento (
-        caseta, fecha, granja_id, existencia_inicial, entrada, consumo, tipo, edad
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `
+    
+    // Validar datos de entrada
+    if (!data) {
+      console.error("insertAlimento: datos nulos o indefinidos");
+      return;
+    }
+    
+    if (!data.caseta || typeof data.caseta !== 'string') {
+      console.error("insertAlimento: caseta inválida:", data.caseta);
+      return;
+    }
+    
+    if (!data.fecha || typeof data.fecha !== 'string') {
+      console.error("insertAlimento: fecha inválida:", data.fecha);
+      return;
+    }
+    
+    if (data.granja_id === null || data.granja_id === undefined || isNaN(data.granja_id)) {
+      console.error("insertAlimento: granja_id inválido:", data.granja_id);
+      return;
+    }
+    
     try {
-      await db.runAsync(query, [
-        data.caseta,
-        data.fecha,
-        data.granja_id,
-        data.existencia_inicial,
-        data.entrada,
-        data.consumo,
-        data.tipo,
-        data.edad,
-      ])
+      // Verificar que la tabla existe
+      const tableCheck = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table' AND name='alimento'");
+      if (!tableCheck || tableCheck.length === 0) {
+        console.error("insertAlimento: La tabla 'alimento' no existe");
+        return;
+      }
+      
+      const query = `
+        INSERT OR REPLACE INTO alimento (
+          caseta, fecha, granja_id, existencia_inicial, entrada, consumo, tipo, edad
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      
+      // Preparar valores con validación
+      const valores = [
+        data.caseta || '',
+        data.fecha || '',
+        data.granja_id || 0,
+        data.existencia_inicial || 0,
+        data.entrada || 0,
+        data.consumo || 0,
+        data.tipo || '',
+        data.edad || '',
+      ];
+      
+      console.log("insertAlimento: Insertando datos:", {
+        caseta: data.caseta,
+        fecha: data.fecha,
+        granja_id: data.granja_id,
+        existencia_inicial: data.existencia_inicial,
+        entrada: data.entrada,
+        consumo: data.consumo,
+        tipo: data.tipo,
+        edad: data.edad
+      });
+      
+      await db.runAsync(query, valores);
+      console.log("insertAlimento: Datos insertados correctamente");
+      
     } catch (error) {
       console.error("Error al guardar alimento:", error);
+      console.error("Datos que causaron el error:", data);
     }
   }
 
@@ -138,13 +185,61 @@ export class DatabaseQueries {
       console.error("No se pudo obtener la base de datos para getAlimentoByFecha:", e);
       return [];
     }
+    
+    // Validar parámetros
+    if (!fecha || typeof fecha !== 'string') {
+      console.error("getAlimentoByFecha: fecha inválida:", fecha);
+      return [];
+    }
+    
+    if (granja_id === null || granja_id === undefined || isNaN(granja_id)) {
+      console.error("getAlimentoByFecha: granja_id inválido:", granja_id);
+      return [];
+    }
+    
     try {
-      const query = "SELECT * FROM alimento WHERE fecha = ? AND granja_id = ? ORDER BY caseta"
-      const result = await db.getAllAsync(query, [fecha, granja_id])
-      return result as AlimentoData[]
+      // Verificar que la tabla existe
+      const tableCheck = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table' AND name='alimento'");
+      if (!tableCheck || tableCheck.length === 0) {
+        console.error("getAlimentoByFecha: La tabla 'alimento' no existe");
+        return [];
+      }
+      
+      // Consulta con validación adicional
+      const query = "SELECT * FROM alimento WHERE fecha = ? AND granja_id = ? ORDER BY caseta";
+      console.log("getAlimentoByFecha: Ejecutando query con fecha:", fecha, "granja_id:", granja_id);
+      
+      const result = await db.getAllAsync(query, [fecha, granja_id]);
+      
+      // Validar resultado
+      if (!result || !Array.isArray(result)) {
+        console.log("getAlimentoByFecha: Resultado inválido, retornando array vacío");
+        return [];
+      }
+      
+      console.log("getAlimentoByFecha: Encontrados", result.length, "registros");
+      return result as AlimentoData[];
+      
     } catch (error) {
       console.error("Error al obtener alimento por fecha:", error);
+      console.error("Parámetros - fecha:", fecha, "granja_id:", granja_id);
       return [];
+    }
+  }
+
+  static async deleteAlimentoByFecha(fecha: string, granja_id: number): Promise<void> {
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para deleteAlimentoByFecha:", e);
+      return;
+    }
+    try {
+      const query = "DELETE FROM alimento WHERE fecha = ? AND granja_id = ?"
+      await db.runAsync(query, [fecha, granja_id])
+    } catch (error) {
+      console.error("Error al eliminar alimento por fecha:", error);
     }
   }
 

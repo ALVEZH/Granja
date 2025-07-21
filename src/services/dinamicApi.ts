@@ -22,7 +22,7 @@ export const fetchFromDynamicApi = async ({
   data = null,
   usarAdmin = false
 }: FetchParams): Promise<any> => {
-  // Seleccionar credenciales según el tipo de operación
+  // Usar las credenciales correctas según las credenciales proporcionadas
   const credenciales = usarAdmin ? {
     user: "usrBDpostura",
     password: "USR45_bd@qa",
@@ -47,17 +47,27 @@ export const fetchFromDynamicApi = async ({
     payload.data = data;
   }
 
+  console.log('🌐 Enviando a API:', {
+    url: 'http://apibd.uaalze.com/dynamic/execute',
+    payload: payload
+  });
+
   const response = await fetch('http://apibd.uaalze.com/dynamic/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
 
+  console.log('📥 Respuesta API:', response.status, response.statusText);
+
   if (!response.ok) {
     const text = await response.text();
+    console.error('❌ Error API:', text);
     throw new Error(`API error ${response.status}: ${text}`);
   }
 
-  const { resultado } = await response.json();
-  return resultado;
+  const result = await response.json();
+  console.log('✅ Resultado API:', result);
+  
+  return result.resultado || result;
 };

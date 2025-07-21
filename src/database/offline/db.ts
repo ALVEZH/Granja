@@ -124,6 +124,62 @@ class DatabaseManager {
       console.error("Error al limpiar tablas:", error)
     }
   }
+
+  // Nueva función de diagnóstico
+  async diagnoseDatabase(): Promise<void> {
+    console.log("=== DIAGNÓSTICO DE BASE DE DATOS ===")
+    
+    try {
+      if (!this.db) {
+        console.log("❌ Base de datos no inicializada")
+        await this.init()
+        if (!this.db) {
+          console.log("❌ No se pudo inicializar la base de datos")
+          return
+        }
+      }
+      
+      console.log("✅ Base de datos inicializada")
+      
+      // Verificar tablas existentes
+      const tables = await this.db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'")
+      console.log("📋 Tablas existentes:", tables.map((t: any) => t.name))
+      
+      // Verificar tabla alimento específicamente
+      const alimentoTable = await this.db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table' AND name='alimento'")
+      if (alimentoTable && alimentoTable.length > 0) {
+        console.log("✅ Tabla 'alimento' existe")
+        
+        // Verificar estructura de la tabla
+        const columns = await this.db.getAllAsync("PRAGMA table_info(alimento)")
+        console.log("📋 Columnas de tabla alimento:", columns.map((c: any) => c.name))
+        
+        // Verificar datos en la tabla
+        const count = await this.db.getFirstAsync("SELECT COUNT(*) as count FROM alimento")
+        console.log("📊 Registros en tabla alimento:", (count as any)?.count || 0)
+        
+        // Mostrar algunos registros de ejemplo
+        const sample = await this.db.getAllAsync("SELECT * FROM alimento LIMIT 3")
+        console.log("📋 Registros de ejemplo:", sample)
+        
+      } else {
+        console.log("❌ Tabla 'alimento' NO existe")
+      }
+      
+      // Verificar permisos y conectividad
+      try {
+        await this.db.runAsync("SELECT 1")
+        console.log("✅ Permisos de lectura/escritura OK")
+      } catch (permError) {
+        console.log("❌ Error de permisos:", permError)
+      }
+      
+    } catch (error) {
+      console.error("❌ Error en diagnóstico:", error)
+    }
+    
+    console.log("=== FIN DIAGNÓSTICO ===")
+  }
 }
 
 export const dbManager = new DatabaseManager()

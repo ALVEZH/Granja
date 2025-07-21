@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation, KeyboardAvoidingView } from 'react-native';
 import { DatabaseQueries } from '../database/offline/queries';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useSeccion } from './EnvaseScreen';
@@ -117,12 +117,44 @@ export default function ExistenciaScreen() {
     });
   };
 
+  // Estado para saber si los datos ya se guardaron
+  const [guardado, setGuardado] = useState(false);
+  // Estado para evitar doble guardado
+  const [guardando, setGuardando] = useState(false);
+
+  // Bloquear navegación por el botón de la flecha si no se ha guardado
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBeforeRemove = (e: any) => {
+        if (guardado) return;
+        e.preventDefault();
+        Alert.alert(
+          '¡Atención!',
+          'Debes guardar los datos antes de salir de la pantalla de existencia.',
+          [
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      };
+      navigation.addListener('beforeRemove', onBeforeRemove);
+      return () => navigation.removeListener('beforeRemove', onBeforeRemove);
+    }, [guardado, navigation])
+  );
+
+  // Función para verificar si una caseta está completa
+  const isCasetaCompleta = (casetaNombre: string) => {
+    const datos = tabla[casetaNombre] || {};
+    return (
+      datos.existenciaInicial !== '' && datos.existenciaInicial !== '0' &&
+      datos.entrada !== '' && datos.entrada !== '0' &&
+      datos.mortalidad !== '' && datos.mortalidad !== '0' &&
+      datos.salida !== '' && datos.salida !== '0' &&
+      datos.edad !== '' && datos.edad !== '0'
+    );
+  };
+
   // Guardar datos en la base de datos
   const handleGuardar = async () => {
-    // if (!seccionSeleccionada) {
-    //   Alert.alert('Error', 'No se ha seleccionado una sección.');
-    //   return;
-    // }
     // Validar que al menos una caseta tenga algún campo lleno
     const algunaCasetaLlena = casetas.some(caseta =>
       tabla[caseta.Nombre].existenciaInicial || tabla[caseta.Nombre].entrada || tabla[caseta.Nombre].mortalidad || tabla[caseta.Nombre].salida || tabla[caseta.Nombre].edad || tabla[caseta.Nombre].existenciaFinal
@@ -131,6 +163,30 @@ export default function ExistenciaScreen() {
       Alert.alert('Error', 'Debes llenar al menos una caseta antes de continuar.');
       return;
     }
+    // Verificar si hay casetas incompletas
+    const casetasIncompletas = casetasFiltradas.filter(c => !isCasetaCompleta(c.Nombre));
+    if (casetasIncompletas.length > 0) {
+      Alert.alert(
+        'Faltan casetas por rellenar',
+        'Hay casetas que no están completamente llenas. ¿Seguro que quieres continuar?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Continuar',
+            style: 'destructive',
+            onPress: () => guardarExistencia(true)
+          }
+        ]
+      );
+      return;
+    }
+    await guardarExistencia(false);
+  };
+
+  // Función auxiliar para guardar los datos
+  const guardarExistencia = async (forzar: boolean) => {
+    if (guardando) return;
+    setGuardando(true);
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
       for (const caseta of casetas) {
@@ -157,10 +213,13 @@ export default function ExistenciaScreen() {
           await DatabaseQueries.insertExistencia(data);
         }
       }
+      setGuardado(true);
       Alert.alert('Éxito', 'Datos de existencia guardados correctamente.');
       navigation.replace('Menu');
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar los datos.');
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -214,8 +273,13 @@ export default function ExistenciaScreen() {
               edad: '',
               existenciaFinal: '0',
             };
+            const completa = isCasetaCompleta(caseta.Nombre);
             return (
-              <View key={caseta.Nombre} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
+              <View key={caseta.Nombre} style={[
+                styles.casetaBlock,
+                idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd,
+                completa && { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
+              ]}>
                 <TouchableOpacity onPress={() => toggleCaseta(caseta.Nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
                   <Text style={styles.casetaTitle}>{caseta.Nombre}</Text>
                   <Text style={styles.caret}>{casetasAbiertas[caseta.Nombre] ? '\u25b2' : '\u25bc'}</Text>
@@ -340,11 +404,12 @@ const styles = StyleSheet.create({
   inputCell: {
     borderWidth: 1.5,
     borderColor: '#b0b8c1',
-    borderRadius: 8,
+    borderRadius: 10,
     width: 110,
-    height: 40,
+    height: 44,
     margin: 4,
     paddingHorizontal: 12,
+    paddingVertical: 8,
     textAlign: 'center',
     backgroundColor: '#fff',
     fontSize: 16,
@@ -370,9 +435,31 @@ const styles = StyleSheet.create({
   casetaContent: { padding: 10 },
   inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   inputLabel: { width: 120, fontWeight: '600', color: '#3b3b3b', fontSize: 13 },
-  totalesBlock: { margin: 16, padding: 10, backgroundColor: '#dbeafe', borderRadius: 8 },
+  totalesBlock: { 
+    margin: 16, 
+    padding: 16, 
+    backgroundColor: '#dbeafe', 
+    borderRadius: 8,
+    flexWrap: 'wrap',
+    minWidth: 0,
+    alignItems: 'flex-start',
+  },
   totalesTitle: { fontWeight: 'bold', fontSize: 15, marginBottom: 6, color: '#2a3a4b' },
-  totalesRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 },
+  totalesRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 4,
+    flexWrap: 'wrap',
+    width: '100%',
+  },
   totalesColumn: {flexDirection: 'column'},
-  totalesCell: { marginRight: 16, fontSize: 15, color: '#333' },
+  totalesCell: { 
+    marginRight: 16, 
+    fontSize: 15, 
+    color: '#333',
+    flexShrink: 1,
+    minWidth: 0,
+    flexWrap: 'wrap',
+    maxWidth: '100%',
+  },
 });

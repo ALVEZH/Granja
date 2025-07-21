@@ -9,6 +9,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useCasetas } from '../hooks/useCasetas';
 import { useProduccionSync } from '../hooks/useProduccionSync';
+import { useAlimentoSync } from '../hooks/useAlimentoSync';
+import { syncExistencia } from '../util/existenciasApi';
+import { syncEnvase } from '../util/envaseApi';
 
 const columnasProduccion = [
   { label: 'BLANCO', key: 'blanco' },
@@ -54,6 +57,7 @@ export default function ResumenSeccion() {
 
   // Hook para sincronización
   const { isSyncing, syncStatus, syncProduccionData } = useProduccionSync();
+  const { isSyncing: isSyncingAlimento, syncStatus: syncStatusAlimento, syncAlimentoData, syncAllAlimentoData, checkSyncStatus } = useAlimentoSync();
 
   useEffect(() => {
     if (!granjaId) return;
@@ -249,6 +253,153 @@ export default function ResumenSeccion() {
             try {
               await syncProduccionData(granjaId, fecha);
               Alert.alert('Éxito', syncStatus || 'Sincronización completada');
+            } catch (error) {
+              Alert.alert('Error', `Error en sincronización: ${error}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSincronizarAlimento = async () => {
+    if (!granjaId) {
+      Alert.alert('Error', 'No hay sección seleccionada');
+      return;
+    }
+
+    Alert.alert(
+      'Sincronizar Alimentos',
+      `¿Deseas sincronizar los datos de alimentos de la sección "${seccionSeleccionada?.Nombre}" para la fecha ${fecha}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sincronizar',
+          onPress: async () => {
+            try {
+              await syncAlimentoData(granjaId, fecha);
+              Alert.alert('Éxito', syncStatusAlimento || 'Sincronización completada');
+            } catch (error) {
+              Alert.alert('Error', `Error en sincronización: ${error}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSincronizarExistencia = async () => {
+    if (!granjaId) {
+      Alert.alert('Error', 'No hay sección seleccionada');
+      return;
+    }
+    Alert.alert(
+      'Sincronizar Existencias',
+      `¿Deseas sincronizar los datos de existencias de la sección "${seccionSeleccionada?.Nombre}" para la fecha ${fecha}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sincronizar',
+          onPress: async () => {
+            try {
+              let exitosos = 0, fallidos = 0;
+              for (const row of existencia) {
+                // Solo sincroniza si hay datos válidos
+                if (
+                  row.caseta &&
+                  (row.inicial > 0 || row.entrada > 0 || row.mortalidad > 0 || row.salida > 0 || row.final > 0)
+                ) {
+                  // Mapear nombre de caseta a su ID real
+                  const casetaObj = casetas.find(c => c.Nombre === row.caseta);
+                  const casetaId = casetaObj ? casetaObj.CasetaID : null;
+                  if (!casetaId) {
+                    console.log('❌ No se encontró el ID para la caseta:', row.caseta);
+                    fallidos++;
+                    continue;
+                  }
+                  const existenciaData = {
+                    GranjaID: granjaId,
+                    CasetaID: casetaId,
+                    Fecha: row.fecha,
+                    ExistenciaInicial: Number(row.inicial) || 0,
+                    Entrada: Number(row.entrada) || 0,
+                    Mortalidad: Number(row.mortalidad) || 0,
+                    Salida: Number(row.salida) || 0,
+                    Edad: Number(row.edad) || 0,
+                    ExistenciaFinal: Number(row.final) || 0,
+                    CreadoPor: 'usuarioApp' // O el nombre real del usuario si lo tienes
+                  };
+                  console.log('Enviando existencia:', existenciaData);
+                  try {
+                    const result = await syncExistencia(existenciaData);
+                    if (result.ok) exitosos++;
+                    else fallidos++;
+                  } catch (error) {
+                    console.log('❌ Error al sincronizar existencia:', error);
+                    fallidos++;
+                  }
+                }
+              }
+              if (fallidos === 0) {
+                Alert.alert('Éxito', `Sincronización completada: ${exitosos} registros subidos exitosamente`);
+              } else if (exitosos > 0) {
+                Alert.alert('Parcial', `Sincronización parcial: ${exitosos} exitosos, ${fallidos} fallidos`);
+              } else {
+                Alert.alert('Error', `Sincronización fallida: ${fallidos} registros fallidos`);
+              }
+            } catch (error) {
+              Alert.alert('Error', `Error en sincronización: ${error}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSincronizarEnvase = async () => {
+    if (!granjaId) {
+      Alert.alert('Error', 'No hay sección seleccionada');
+      return;
+    }
+    Alert.alert(
+      'Sincronizar Envases',
+      `¿Deseas sincronizar los datos de envases de la sección "${seccionSeleccionada?.Nombre}" para la fecha ${fecha}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sincronizar',
+          onPress: async () => {
+            try {
+              let exitosos = 0, fallidos = 0;
+              for (const row of envase) {
+                if (row.tipo) {
+                  const envaseData = {
+                    GranjaID: granjaId,
+                    Fecha: row.fecha,
+                    TipoEnvase: row.tipo,
+                    ExistenciaInicial: Number(row.inicial) || 0,
+                    Recibido: Number(row.recibido) || 0,
+                    Consumo: Number(row.consumo) || 0,
+                    ExistenciaFinal: Number(row.final) || 0,
+                    CreadoPor: 'usuarioApp'
+                  };
+                  try {
+                    const result = await syncEnvase(envaseData);
+                    if (result.ok) exitosos++;
+                    else fallidos++;
+                  } catch (error) {
+                    console.log('❌ Error al sincronizar envase:', error);
+                    fallidos++;
+                  }
+                }
+              }
+              if (fallidos === 0) {
+                Alert.alert('Éxito', `Sincronización completada: ${exitosos} registros subidos exitosamente`);
+              } else if (exitosos > 0) {
+                Alert.alert('Parcial', `Sincronización parcial: ${exitosos} exitosos, ${fallidos} fallidos`);
+              } else {
+                Alert.alert('Error', `Sincronización fallida: ${fallidos} registros fallidos`);
+              }
             } catch (error) {
               Alert.alert('Error', `Error en sincronización: ${error}`);
             }
@@ -507,10 +658,47 @@ export default function ResumenSeccion() {
             {isSyncing ? 'Sincronizando...' : 'Sincronizar Producción'}
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.btnExportar, { backgroundColor: '#17a2b8', marginTop: 0 }]} 
+          onPress={handleSincronizarAlimento}
+          disabled={isSyncingAlimento}
+        >
+          <Ionicons name="cloud-upload" size={24} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.btnExportarText}>
+            {isSyncingAlimento ? 'Sincronizando...' : 'Sincronizar Alimentos'}
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.btnExportar, { backgroundColor: '#ffc107', marginTop: 0 }]} 
+          onPress={handleSincronizarExistencia}
+        >
+          <Ionicons name="cloud-upload" size={24} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.btnExportarText}>
+            Sincronizar Existencias
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.btnExportar, { backgroundColor: '#6f42c1', marginTop: 0 }]} 
+          onPress={handleSincronizarEnvase}
+        >
+          <Ionicons name="cloud-upload" size={24} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.btnExportarText}>
+            Sincronizar Envases
+          </Text>
+        </TouchableOpacity>
         
         {syncStatus ? (
           <View style={{ padding: 10, margin: 16, backgroundColor: '#f8f9fa', borderRadius: 8, borderWidth: 1, borderColor: '#dee2e6' }}>
             <Text style={{ fontSize: 14, color: '#6c757d', textAlign: 'center' }}>{syncStatus}</Text>
+          </View>
+        ) : null}
+        
+        {syncStatusAlimento ? (
+          <View style={{ padding: 10, margin: 16, backgroundColor: '#f8f9fa', borderRadius: 8, borderWidth: 1, borderColor: '#dee2e6' }}>
+            <Text style={{ fontSize: 14, color: '#6c757d', textAlign: 'center' }}>{syncStatusAlimento}</Text>
           </View>
         ) : null}
         {/* Inputs de firmas y nombres eliminados */}
@@ -520,7 +708,7 @@ export default function ResumenSeccion() {
 }
 
 // Cambia los estilos de las tablas y celdas para mejor alineación y legibilidad
-const COL_WIDTH = 80; // Ancho más compacto para que quepan todas las columnas
+const COL_WIDTH = 120; // Aumentar el ancho de las celdas para inputs
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
   headerSafeArea: {
@@ -606,12 +794,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0, // Sin padding extra
   },
   inputCell: {
-    fontSize: 13,
+    fontSize: 16, // Aumentar tamaño de fuente
     color: '#222',
     width: COL_WIDTH,
+    minWidth: 80,
     textAlign: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 0,
+    paddingHorizontal: 4,
     borderRightWidth: 1,
     borderColor: '#b0b0b0',
   },
@@ -632,12 +821,14 @@ const styles = StyleSheet.create({
   },
   cell: {
     width: COL_WIDTH,
+    minWidth: 80,
     borderRightWidth: 1,
     borderColor: '#b0b0b0',
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#fff',
     paddingVertical: 6,
+    paddingHorizontal: 4, // Un poco de padding horizontal
   },
   cellHeader: {
     width: COL_WIDTH,

@@ -1,8 +1,9 @@
 "use client"
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Image, Platform, UIManager, LayoutAnimation, KeyboardAvoidingView } from 'react-native';
 import { DatabaseQueries } from '../database/offline/queries';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useSeccion } from './EnvaseScreen';
@@ -10,7 +11,13 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useCasetas } from '../hooks/useCasetas';
 import { useGranjas } from '../hooks/useGranjas';
 
-// Definir el tipo para los datos de cada caseta
+
+// Habilita LayoutAnimation en Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Definir el tipo para los datos de cada caseta en alimentos
 interface CasetaAlimento {
   existenciaInicial: string;
   entrada: string;
@@ -18,59 +25,86 @@ interface CasetaAlimento {
   tipo: string;
 }
 
-const columnas = ['Existencia Inicial', 'Entrada', 'Consumo', 'Tipo'];
-
 export default function AlimentoScreen() {
-  // const route = useRoute();
-  // const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { seccionSeleccionada } = useSeccion();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  // Elimina el estado de fecha y usa siempre la fecha actual en el render
-  // const [fecha, setFecha] = useState(() => {
-  //   const today = new Date();
-  //   return today.toISOString().split('T')[0];
-  // });
-  const fechaHoy = new Date().toISOString().split('T')[0];
 
-  // Obtener GranjaID de la granja seleccionada (asumiendo que seccionSeleccionada es "Granja - Caseta")
   const granjaId = seccionSeleccionada?.GranjaID ?? null;
   const granjaNombre = seccionSeleccionada?.Nombre ?? '';
   const { granjas } = useGranjas();
   const granja = granjas.find(g => g.Nombre === granjaNombre);
   const { casetas, loading: loadingCasetas, error: errorCasetas } = useCasetas(granjaId);
 
-  // Filtrar solo las casetas de la granja seleccionada (por si la API no lo hace)
+  // Filtrar solo las casetas de la granja seleccionada
   const casetasFiltradas = casetas?.filter(c => c.GranjaID === granjaId) ?? [];
+
+  const fechaHoy = new Date().toISOString().split('T')[0];
 
   // Estructura: { [caseta]: { existenciaInicial, entrada, consumo, tipo } }
   const [tabla, setTabla] = useState<Record<string, CasetaAlimento>>({});
 
-  // Sincronizar tabla cuando cambian las casetas
+  // Cargar datos existentes cuando cambian las casetas o la fecha
   useEffect(() => {
-    if (!casetas) return;
-    setTabla((prev: Record<string, CasetaAlimento>) => {
-      const obj: Record<string, CasetaAlimento> = {};
-      casetas.forEach(caseta => {
-        obj[caseta.Nombre] = prev[caseta.Nombre] || { existenciaInicial: '', entrada: '', consumo: '', tipo: '' };
-      });
-      return obj;
-    });
-  }, [casetas]);
+    if (!casetasFiltradas || !granjaId) return;
+    
+    const cargarDatosExistentes = async () => {
+      try {
+        const datosExistentes = await DatabaseQueries.getAlimentoByFecha(fechaHoy, granjaId);
+        
+        setTabla(prev => {
+          const obj: Record<string, CasetaAlimento> = {};
+          
+          // Inicializar todas las casetas con datos vacíos
+          casetasFiltradas.forEach(caseta => {
+            obj[caseta.Nombre] = {
+              existenciaInicial: '',
+              entrada: '',
+              consumo: '',
+              tipo: ''
+            };
+          });
+          
+          // Cargar datos existentes
+          datosExistentes.forEach((registro: any) => {
+            if (obj[registro.caseta]) {
+              obj[registro.caseta] = {
+                existenciaInicial: registro.existencia_inicial?.toString() || '',
+                entrada: registro.entrada?.toString() || '',
+                consumo: registro.consumo?.toString() || '',
+                tipo: registro.tipo || ''
+              };
+            }
+          });
+          
+          return obj;
+        });
+      } catch (error) {
+        console.error('Error cargando datos existentes:', error);
+      }
+    };
+    
+    cargarDatosExistentes();
+  }, [casetasFiltradas.length, granjaId, fechaHoy]);
 
   // Calcular totales
   const totales = useMemo(() => {
     let existenciaInicial = 0, entrada = 0, consumo = 0;
-    casetas?.forEach(caseta => {
-      existenciaInicial += Number(tabla[caseta.Nombre]?.existenciaInicial) || 0;
-      entrada += Number(tabla[caseta.Nombre]?.entrada) || 0;
-      consumo += Number(tabla[caseta.Nombre]?.consumo) || 0;
+    
+    casetasFiltradas.forEach(caseta => {
+      const datosCaseta = tabla[caseta.Nombre];
+      if (datosCaseta) {
+        existenciaInicial += Number(datosCaseta.existenciaInicial) || 0;
+        entrada += Number(datosCaseta.entrada) || 0;
+        consumo += Number(datosCaseta.consumo) || 0;
+      }
     });
+    
     return { existenciaInicial, entrada, consumo };
-  }, [tabla, casetas]);
+  }, [tabla, casetasFiltradas.length]);
 
   // Manejar cambios en la tabla
-  const handleChange = (caseta: string, campo: string, valor: string) => {
-    setTabla((prev: Record<string, CasetaAlimento>) => ({
+  const handleChange = (caseta: string, campo: 'existenciaInicial' | 'entrada' | 'consumo' | 'tipo', valor: string) => {
+    setTabla((prev: typeof tabla) => ({
       ...prev,
       [caseta]: {
         ...prev[caseta],
@@ -79,46 +113,124 @@ export default function AlimentoScreen() {
     }));
   };
 
-  // Guardar datos en la base de datos
-  const handleGuardar = async () => {
-    for (const caseta of casetas || []) {
-      // Solo guarda si hay algún campo lleno
-      if (
-        tabla[caseta.Nombre]?.existenciaInicial ||
-        tabla[caseta.Nombre]?.entrada ||
-        tabla[caseta.Nombre]?.consumo ||
-        tabla[caseta.Nombre]?.tipo
-      ) {
-        const data: any = {
-          caseta: caseta.Nombre,
-          fecha: fechaHoy,
-          granja_id: granjaId,
-          existencia_inicial: Number(tabla[caseta.Nombre]?.existenciaInicial) || 0,
-          entrada: Number(tabla[caseta.Nombre]?.entrada) || 0,
-          consumo: Number(tabla[caseta.Nombre]?.consumo) || 0,
-          tipo: tabla[caseta.Nombre]?.tipo,
-          edad: '',
-        };
-        await DatabaseQueries.insertAlimento(data);
-      }
-    }
-    Alert.alert('Éxito', 'Datos de alimento guardados correctamente.');
-    navigation.replace('Menu');
-  };
-
   // Estado para controlar qué casetas están abiertas
-  const [casetasAbiertas, setCasetasAbiertas] = useState<{ [caseta: string]: boolean }>(() => {
-    const obj: { [caseta: string]: boolean } = {};
-    casetas?.forEach(c => { obj[c.Nombre] = false; });
-    return obj;
-  });
+  const [casetasAbiertas, setCasetasAbiertas] = useState<{ [caseta: string]: boolean }>({});
+
+  // Inicializar casetas abiertas cuando cambian las casetas filtradas
+  useEffect(() => {
+    if (!casetasFiltradas) return;
+    setCasetasAbiertas(prev => {
+      const obj: { [caseta: string]: boolean } = { ...prev };
+      let changed = false;
+      casetasFiltradas.forEach(c => {
+        if (!(c.Nombre in obj)) {
+          obj[c.Nombre] = false;
+          changed = true;
+        }
+      });
+      return changed ? obj : prev;
+    });
+  }, [casetasFiltradas.length]);
 
   const toggleCaseta = (caseta: string) => {
-    if (typeof LayoutAnimation !== 'undefined') {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    }
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCasetasAbiertas(prev => ({ ...prev, [caseta]: !prev[caseta] }));
   };
+
+  // Estado para saber si los datos ya se guardaron
+  const [guardado, setGuardado] = useState(false);
+  // Estado para evitar doble guardado
+  const [guardando, setGuardando] = useState(false);
+
+  // Bloquear navegación por el botón de la flecha si no se ha guardado
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBeforeRemove = (e: any) => {
+        if (guardado) return;
+        e.preventDefault();
+        Alert.alert(
+          '¡Atención!',
+          'Debes guardar los datos antes de salir de la pantalla de alimentos.',
+          [
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      };
+      navigation.addListener('beforeRemove', onBeforeRemove);
+      return () => navigation.removeListener('beforeRemove', onBeforeRemove);
+    }, [guardado, navigation])
+  );
+
+  // Función para verificar si una caseta está completa
+  const isCasetaCompleta = (casetaNombre: string) => {
+    const datosCaseta = tabla[casetaNombre] || {};
+    return (
+      datosCaseta.existenciaInicial !== '' && datosCaseta.existenciaInicial !== '0' &&
+      datosCaseta.entrada !== '' && datosCaseta.entrada !== '0' &&
+      datosCaseta.consumo !== '' && datosCaseta.consumo !== '0' &&
+      datosCaseta.tipo && datosCaseta.tipo.trim() !== ''
+    );
+  };
+
+  // Guardar datos en la base de datos
+  const handleGuardar = async () => {
+    if (!seccionSeleccionada) {
+      Alert.alert('Error', 'No se ha seleccionado una sección.');
+      return;
+    }
+    // Verificar si hay casetas incompletas
+    const casetasIncompletas = casetasFiltradas.filter(c => !isCasetaCompleta(c.Nombre));
+    if (casetasIncompletas.length > 0) {
+      Alert.alert(
+        'Faltan casetas por rellenar',
+        'Hay casetas que no están completamente llenas. ¿Seguro que quieres continuar?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Continuar',
+            style: 'destructive',
+            onPress: () => guardarAlimentos(true)
+          }
+        ]
+      );
+      return;
+    }
+    await guardarAlimentos(false);
+  };
+
+  // Función auxiliar para guardar los datos
+  const guardarAlimentos = async (forzar: boolean) => {
+    if (guardando) return;
+    setGuardando(true);
+    try {
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      for (const caseta of casetasFiltradas || []) {
+        const datosCaseta = tabla[caseta.Nombre];
+        if (datosCaseta && (datosCaseta.existenciaInicial || datosCaseta.entrada || datosCaseta.consumo || datosCaseta.tipo)) {
+          const data: any = {
+            caseta: caseta.Nombre,
+            tipo: datosCaseta.tipo || 'Alimento',
+            existencia_inicial: Number(datosCaseta.existenciaInicial) || 0,
+            entrada: Number(datosCaseta.entrada) || 0,
+            consumo: Number(datosCaseta.consumo) || 0,
+            fecha: fechaHoy,
+            granja_id: granjaId,
+            calidad: 'Alimento'
+          };
+          console.log('Guardando alimento:', data);
+          await DatabaseQueries.insertAlimento(data);
+        }
+      }
+      setGuardado(true);
+      Alert.alert('Éxito', 'Datos de alimentos guardados correctamente.');
+      navigation.replace('Menu');
+    } catch (error) {
+      Alert.alert('Error', 'No se pudieron guardar los datos.');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -129,7 +241,7 @@ export default function AlimentoScreen() {
         >
           <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>ALIMENTO</Text>
+        <Text style={styles.headerTitle}>ALIMENTOS</Text>
         <View style={{ width: 40 }} />
       </View>
       <KeyboardAvoidingView
@@ -147,57 +259,65 @@ export default function AlimentoScreen() {
           </View>
           {loadingCasetas && <Text>Cargando casetas...</Text>}
           {errorCasetas && <Text style={{ color: 'red' }}>{errorCasetas}</Text>}
-          {casetasFiltradas && casetasFiltradas.map((caseta, idx) => (
-            <View key={caseta.Nombre} style={[styles.casetaBlock, idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd]}>
-              <TouchableOpacity onPress={() => toggleCaseta(caseta.Nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
-                <Text style={styles.casetaTitle}>{caseta.Nombre}</Text>
-                <Text style={styles.caret}>{casetasAbiertas[caseta.Nombre] ? '\u25b2' : '\u25bc'}</Text>
-              </TouchableOpacity>
-              {casetasAbiertas[caseta.Nombre] && (
-                <View style={styles.casetaContent}>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Existencia Inicial</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta.Nombre]?.existenciaInicial || ''}
-                      onChangeText={v => handleChange(caseta.Nombre, 'existenciaInicial', v)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
+          {casetasFiltradas.map((caseta, idx) => {
+            const datosCaseta = tabla[caseta.Nombre] || { existenciaInicial: '', entrada: '', consumo: '', tipo: '' };
+            const completa = isCasetaCompleta(caseta.Nombre);
+            return (
+              <View key={caseta.Nombre} style={[
+                styles.casetaBlock,
+                idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd,
+                completa && { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
+              ]}>
+                <TouchableOpacity onPress={() => toggleCaseta(caseta.Nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
+                  <Text style={styles.casetaTitle}>{caseta.Nombre}</Text>
+                  <Text style={styles.caret}>{casetasAbiertas[caseta.Nombre] ? '\u25b2' : '\u25bc'}</Text>
+                </TouchableOpacity>
+                {casetasAbiertas[caseta.Nombre] && (
+                  <View style={styles.casetaContent}>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Existencia Inicial</Text>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={datosCaseta.existenciaInicial}
+                        onChangeText={v => handleChange(caseta.Nombre, 'existenciaInicial', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Entrada</Text>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={datosCaseta.entrada}
+                        onChangeText={v => handleChange(caseta.Nombre, 'entrada', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Consumo</Text>
+                      <TextInput
+                        style={styles.inputCell}
+                        value={datosCaseta.consumo}
+                        onChangeText={v => handleChange(caseta.Nombre, 'consumo', v)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Tipo</Text>
+                      <TextInput
+                        style={styles.inputCellTipo}
+                        value={datosCaseta.tipo}
+                        onChangeText={v => handleChange(caseta.Nombre, 'tipo', v)}
+                        placeholder="Tipo"
+                      />
+                    </View>
                   </View>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Entrada</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta.Nombre]?.entrada || ''}
-                      onChangeText={v => handleChange(caseta.Nombre, 'entrada', v)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Consumo</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta.Nombre]?.consumo || ''}
-                      onChangeText={v => handleChange(caseta.Nombre, 'consumo', v)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Tipo</Text>
-                    <TextInput
-                      style={styles.inputCell}
-                      value={tabla[caseta.Nombre]?.tipo || ''}
-                      onChangeText={v => handleChange(caseta.Nombre, 'tipo', v)}
-                      placeholder="Tipo"
-                    />
-                  </View>
-                </View>
-              )}
-            </View>
-          ))}
+                )}
+              </View>
+            );
+          })}
           {/* Totales generales */}
           <View style={styles.totalesBlock}>
             <Text style={styles.totalesTitle}>Totales</Text>
@@ -218,10 +338,6 @@ export default function AlimentoScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
-  keyboard: { flex: 1 },
-  scroll: { flexGrow: 1, padding: 24 },
-  scrollContent: { paddingBottom: 30 },
-  headerContainer: { alignItems: 'center', marginTop: 30, marginBottom: 10 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -244,45 +360,101 @@ const styles = StyleSheet.create({
     flex: 1,
     letterSpacing: 1,
   },
+  keyboard: { flex: 1 },
+  scroll: { flexGrow: 1, padding: 24 },
+  scrollContent: { paddingBottom: 30 },
+  headerContainer: { alignItems: 'center', marginTop: 30, marginBottom: 10 },
   headerImage: { width: 48, height: 48, marginRight: 10 },
+  headerTextAbsoluteWrapper: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
   subtitle: { fontSize: 15, color: '#333', marginBottom: 10, textAlign: 'center' },
-  title: { fontSize: 18, fontWeight: 'bold', margin: 12, textAlign: 'center', color: '#333' },
-  table: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 8, margin: 8, backgroundColor: '#fff' },
-  headerRowTable: { flexDirection: 'row', backgroundColor: '#dbeafe', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
-  headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 90, textAlign: 'center', color: '#222' },
-  dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
-  casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 70, textAlign: 'center', color: '#333' },
-  inputCell: {
-    borderWidth: 1.5,
-    borderColor: '#b0b8c1',
-    borderRadius: 8,
-    width: 110,
-    height: 40,
-    margin: 4,
-    paddingHorizontal: 12,
-    textAlign: 'center',
-    backgroundColor: '#fff',
-    fontSize: 16,
-    color: '#222',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  btnGuardar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
-  btnGuardarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   casetaBlock: { borderRadius: 10, margin: 10, padding: 0, elevation: 2, overflow: 'hidden' },
   casetaBlockEven: { backgroundColor: '#f4f8fd' },
   casetaBlockOdd: { backgroundColor: '#e0e7ef' },
   casetaHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: '#c7d7ee' },
   casetaTitle: { fontSize: 16, fontWeight: 'bold', color: '#2a3a4b' },
   caret: { fontSize: 18, color: '#2a3a4b', marginLeft: 8 },
-  casetaContent: { padding: 10 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  inputLabel: { width: 120, fontWeight: '600', color: '#3b3b3b', fontSize: 13 },
-  totalesBlock: { margin: 16, padding: 10, backgroundColor: '#dbeafe', borderRadius: 8 },
+  casetaContent: { padding: 16 },
+  inputRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 8
+  },
+  inputLabel: { 
+    fontSize: 14, 
+    color: '#333', 
+    fontWeight: '500',
+    flex: 1,
+    marginRight: 16
+  },
+  inputCell: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10, // más redondeado
+    width: 120,
+    height: 44, // más alto
+    paddingHorizontal: 12,
+    paddingVertical: 8, // más padding vertical
+    textAlign: 'center',
+    backgroundColor: '#fff',
+    fontSize: 16,
+    color: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  inputCellTipo: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    width: 180,
+    height: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    textAlign: 'left',
+    backgroundColor: '#fff',
+    fontSize: 16,
+    color: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  totalesBlock: { 
+    margin: 16, 
+    padding: 16, // más padding
+    backgroundColor: '#dbeafe', 
+    borderRadius: 8,
+    flexWrap: 'wrap',
+    minWidth: 0,
+    alignItems: 'flex-start',
+  },
   totalesTitle: { fontWeight: 'bold', fontSize: 15, marginBottom: 6, color: '#2a3a4b' },
-  totalesRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 },
-  totalesCell: { marginRight: 16, fontSize: 13, color: '#333' },
+  totalesRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 4,
+    flexWrap: 'wrap',
+    width: '100%',
+  },
+  totalesCell: { 
+    marginLeft: 10, 
+    fontSize: 15, 
+    color: '#333',
+    flexShrink: 1,
+    minWidth: 0,
+    flexWrap: 'wrap',
+    maxWidth: '100%',
+  },
+  btnGuardar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
+  btnGuardarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  table: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 8, margin: 8, backgroundColor: '#fff' },
+  headerRowTable: { flexDirection: 'row', backgroundColor: '#dbeafe', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+  headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 90, textAlign: 'center', color: '#222' },
+  dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
+  casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 70, textAlign: 'center', color: '#333' },
 });
