@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Image, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -19,21 +19,49 @@ export default function SeleccionSeccion() {
     navigation.navigate('Menu');
   };
 
+  // Lógica de cierre de sesión
+  const handleCerrarSesion = () => {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Quieres cerrar la sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar sesión',
+          style: 'destructive',
+          onPress: () => {
+            setSeccionSeleccionada(null);
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Selecciona una sección</Text>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Selecciona una sección</Text>
+          <TouchableOpacity onPress={handleCerrarSesion} style={styles.logoutButton}>
+            <Image source={require('../../assets/Iconos/CerrarSesion.png')} style={{ width: 28, height: 28 }} resizeMode="contain" />
+          </TouchableOpacity>
+        </View>
         {loadingGranjas && <ActivityIndicator size="large" color="#749BC2" style={{ marginVertical: 20 }} />}
         {errorGranjas && <Text style={{ color: 'red' }}>{errorGranjas}</Text>}
-        {!loadingGranjas && granjas.map((granja) => (
-          <TouchableOpacity
-            key={granja.GranjaID}
-            style={styles.button}
-            onPress={() => handleSeleccion(granja)}
-          >
-            <Text style={styles.buttonText}>{granja.Nombre}</Text>
-          </TouchableOpacity>
-        ))}
+        <View style={styles.container}>
+          {!loadingGranjas && granjas
+            .filter(granja => granja.Nombre !== 'TEST_GRANJA_API')
+            .map((granja) => (
+            <TouchableOpacity
+              key={granja.GranjaID}
+              style={styles.button}
+              onPress={() => handleSeleccion(granja)}
+            >
+              <Text style={styles.buttonText}>{granja.Nombre}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -44,17 +72,43 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#eaf1f9',
   },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingTop: 20,
+    paddingBottom: 30,
+    paddingHorizontal: 0,
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    marginTop: 10,
+    width: '100%',
+    paddingHorizontal: 20,
+    position: 'relative',
+  },
+  logoutButton: {
+    position: 'absolute',
+    right: 20,
+    top: 0,
+    padding: 4,
+  },
   container: {
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 30,
-    marginTop: 25,
     color: '#333',
     textAlign: 'center',
+    flex: 1,
+    marginBottom: 0,
+    marginTop: 0,
   },
   button: {
     width: '70%',

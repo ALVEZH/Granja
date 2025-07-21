@@ -103,33 +103,46 @@ export default function EnvaseScreen() {
   // Estado para evitar doble guardado
   const [guardando, setGuardando] = useState(false);
 
-  // Bloquear navegación por el botón de la flecha si no se ha guardado
+  // Función para saber si hay algún dato ingresado en cualquier input
+  const hayDatosIngresados = () => {
+    return envases.some(envase => {
+      const datos = tabla[envase] || { existenciaInicial: '', recibido: '', consumo: '', existenciaFinal: '0' };
+      return (
+        (datos.existenciaInicial !== '' && datos.existenciaInicial !== '0') ||
+        (datos.recibido !== '' && datos.recibido !== '0') ||
+        (datos.consumo !== '' && datos.consumo !== '0')
+      );
+    });
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       const onBeforeRemove = (e: any) => {
-        if (guardado) return;
-        e.preventDefault();
-        Alert.alert(
-          '¡Atención!',
-          'Debes guardar los datos antes de salir de la pantalla de envase.',
-          [
-            { text: 'OK', style: 'cancel' }
-          ]
-        );
+        if (hayDatosIngresados()) {
+          e.preventDefault();
+          Alert.alert(
+            'Atención',
+            'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
+            [
+              { text: 'OK', style: 'cancel' }
+            ]
+          );
+        }
+        // Si no hay datos, permite salir normalmente
       };
       navigation.addListener('beforeRemove', onBeforeRemove);
       return () => navigation.removeListener('beforeRemove', onBeforeRemove);
-    }, [guardado, navigation])
+    }, [navigation, tabla, envases])
   );
 
   // Función para verificar si un envase está completo
   const isEnvaseCompleto = (envase: string) => {
     const datos = tabla[envase] || {};
+    // Un envase está "completo" si al menos un campo tiene datos distintos de vacío o cero
     return (
-      datos.existenciaInicial !== '' && datos.existenciaInicial !== '0' &&
-      datos.recibido !== '' && datos.recibido !== '0' &&
-      datos.consumo !== '' && datos.consumo !== '0' &&
-      datos.existenciaFinal !== '' && datos.existenciaFinal !== '0'
+      (datos.existenciaInicial !== '' && datos.existenciaInicial !== '0') ||
+      (datos.recibido !== '' && datos.recibido !== '0') ||
+      (datos.consumo !== '' && datos.consumo !== '0')
     );
   };
 
@@ -139,24 +152,30 @@ export default function EnvaseScreen() {
       Alert.alert('Error', 'No se ha seleccionado una sección.');
       return;
     }
-    // Verificar si hay envases incompletos
-    const envasesIncompletos = envases.filter(e => !isEnvaseCompleto(e));
-    if (envasesIncompletos.length > 0) {
+    await guardarEnvases(false);
+    // Limpiar la tabla local después de guardar (pero NO borrar los datos locales)
+    setTabla(() => {
+      const obj: any = {};
+      envases.forEach(envase => {
+        obj[envase] = { existenciaInicial: '', recibido: '', consumo: '', existenciaFinal: '0' };
+      });
+      return obj;
+    });
+    setGuardado(true);
+  };
+
+  const handleContinuar = () => {
+    if (hayDatosIngresados()) {
       Alert.alert(
-        'Faltan envases por rellenar',
-        'Hay envases que no están completamente llenos. ¿Seguro que quieres continuar?',
+        'Atención',
+        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
         [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Continuar',
-            style: 'destructive',
-            onPress: () => guardarEnvases(true)
-          }
+          { text: 'OK', style: 'cancel' }
         ]
       );
       return;
     }
-    await guardarEnvases(false);
+    navigation.replace('Menu');
   };
 
   // Función auxiliar para guardar los datos
@@ -166,18 +185,18 @@ export default function EnvaseScreen() {
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
       for (const envase of envases) {
-        const data: any = {
+          const data: any = {
           caseta: envase, // El tipo de envase es la caseta
-          fecha: fechaHoy,
-          granja_id: (seccionSeleccionada as any)?.GranjaID ?? null,
-          tipo: envase,
-          inicial: Number(tabla[envase].existenciaInicial) || 0,
-          recibido: Number(tabla[envase].recibido) || 0,
-          consumo: Number(tabla[envase].consumo) || 0,
-          final: Number(tabla[envase].existenciaFinal) || 0,
-        };
-        await DatabaseQueries.insertEnvase(data);
-      }
+            fecha: fechaHoy,
+            granja_id: (seccionSeleccionada as any)?.GranjaID ?? null,
+            tipo: envase,
+            inicial: Number(tabla[envase].existenciaInicial) || 0,
+            recibido: Number(tabla[envase].recibido) || 0,
+            consumo: Number(tabla[envase].consumo) || 0,
+            final: Number(tabla[envase].existenciaFinal) || 0,
+          };
+          await DatabaseQueries.insertEnvase(data);
+        }
       setGuardado(true);
       Alert.alert('Éxito', 'Datos de envase guardados correctamente.');
       navigation.replace('Menu');
@@ -237,62 +256,67 @@ export default function EnvaseScreen() {
             <Text style={styles.subtitle}>{seccionSeleccionada?.Nombre} - {fechaHoy}</Text>
           </View>
           {envases.map((envase, idx) => {
-            const completa = isEnvaseCompleto(envase);
+            const completo = isEnvaseCompleto(envase);
             return (
-              <View key={envase} style={[
-                styles.casetaBlock,
-                idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd,
-                completa && { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
-              ]}>
-                <TouchableOpacity onPress={() => toggleEnvase(envase)} style={styles.casetaHeader} activeOpacity={0.7}>
-                  <Text style={styles.casetaTitle}>{envase}</Text>
-                  <Text style={styles.caret}>{envasesAbiertos[envase] ? '▲' : '▼'}</Text>
-                </TouchableOpacity>
-                {envasesAbiertos[envase] && (
-                  <View style={styles.casetaContent}>
-                    <View style={styles.inputRow}>
-                      <Text style={styles.inputLabel}>Existencia Inicial</Text>
-                      <TextInput
-                        style={styles.inputCell}
-                        value={tabla[envase].existenciaInicial}
-                        onChangeText={v => handleChange(envase, 'existenciaInicial', v)}
-                        keyboardType="numeric"
-                        placeholder="0"
-                      />
-                    </View>
-                    <View style={styles.inputRow}>
-                      <Text style={styles.inputLabel}>Recibido</Text>
-                      <TextInput
-                        style={styles.inputCell}
-                        value={tabla[envase].recibido}
-                        onChangeText={v => handleChange(envase, 'recibido', v)}
-                        keyboardType="numeric"
-                        placeholder="0"
-                      />
-                    </View>
-                    <View style={styles.inputRow}>
-                      <Text style={styles.inputLabel}>Consumo</Text>
-                      <TextInput
-                        style={styles.inputCell}
-                        value={tabla[envase].consumo}
-                        onChangeText={v => handleChange(envase, 'consumo', v)}
-                        keyboardType="numeric"
-                        placeholder="0"
-                      />
-                    </View>
-                    <View style={styles.inputRow}>
-                      <Text style={styles.inputLabel}>Existencia Final</Text>
-                      <TextInput
-                        style={styles.inputCell}
-                        value={tabla[envase].existenciaFinal}
-                        onChangeText={v => handleChange(envase, 'existenciaFinal', v)}
-                        keyboardType="numeric"
-                        placeholder="0"
-                      />
-                    </View>
+              <View
+                key={envase}
+                style={[
+                  styles.envaseBlock,
+                  idx % 2 === 0 ? styles.envaseBlockEven : styles.envaseBlockOdd,
+                  completo
+                    ? { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 }
+                    : styles.envaseBlockRoja,
+                ]}
+              >
+              <TouchableOpacity onPress={() => toggleEnvase(envase)} style={styles.casetaHeader} activeOpacity={0.7}>
+                <Text style={styles.casetaTitle}>{envase}</Text>
+                <Text style={styles.caret}>{envasesAbiertos[envase] ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+              {envasesAbiertos[envase] && (
+                <View style={styles.casetaContent}>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Existencia Inicial</Text>
+                    <TextInput
+                      style={styles.inputCell}
+                      value={tabla[envase].existenciaInicial}
+                      onChangeText={v => handleChange(envase, 'existenciaInicial', v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
                   </View>
-                )}
-              </View>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Recibido</Text>
+                    <TextInput
+                      style={styles.inputCell}
+                      value={tabla[envase].recibido}
+                      onChangeText={v => handleChange(envase, 'recibido', v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </View>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Consumo</Text>
+                    <TextInput
+                      style={styles.inputCell}
+                      value={tabla[envase].consumo}
+                      onChangeText={v => handleChange(envase, 'consumo', v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </View>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Existencia Final</Text>
+                    <TextInput
+                      style={styles.inputCell}
+                      value={tabla[envase].existenciaFinal}
+                      onChangeText={v => handleChange(envase, 'existenciaFinal', v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
             );
           })}
           {/* Totales generales */}
@@ -305,9 +329,14 @@ export default function EnvaseScreen() {
               <Text style={styles.totalesCell}>Existencia Final: {totales.existenciaFinal}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
-            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 24 }}>
+            <TouchableOpacity style={styles.guardarButton} onPress={handleGuardar}>
+              <Text style={styles.guardarButtonText}>Guardar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.continuarButton} onPress={handleContinuar}>
+              <Text style={styles.continuarButtonText}>Continuar</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -370,9 +399,10 @@ const styles = StyleSheet.create({
   headerContainer: { alignItems: 'center', marginTop: 30, marginBottom: 10 },
   headerImage: { width: 48, height: 48, marginRight: 10 },
   subtitle: { fontSize: 15, color: '#333', marginBottom: 10, textAlign: 'center' },
-  casetaBlock: { borderRadius: 10, margin: 10, padding: 0, elevation: 2, overflow: 'hidden' },
-  casetaBlockEven: { backgroundColor: '#f4f8fd' },
-  casetaBlockOdd: { backgroundColor: '#e0e7ef' },
+  envaseBlock: { borderRadius: 10, margin: 10, padding: 0, elevation: 2, overflow: 'hidden' },
+  envaseBlockEven: { backgroundColor: '#f4f8fd' },
+  envaseBlockOdd: { backgroundColor: '#e0e7ef' },
+  envaseBlockRoja: { backgroundColor: '#ffd6d6', borderColor: '#e53935', borderWidth: 2, shadowColor: '#e53935', shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
   casetaHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: '#c7d7ee' },
   casetaTitle: { fontSize: 16, fontWeight: 'bold', color: '#2a3a4b' },
   caret: { fontSize: 18, color: '#2a3a4b', marginLeft: 8 },
@@ -404,5 +434,31 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexWrap: 'wrap',
     maxWidth: '100%',
+  },
+  guardarButton: {
+    flex: 1,
+    backgroundColor: '#1db954',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  guardarButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  continuarButton: {
+    flex: 1,
+    backgroundColor: '#007bff',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  continuarButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });

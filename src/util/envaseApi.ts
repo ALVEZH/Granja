@@ -24,6 +24,8 @@ export const syncEnvase = async (envase: EnvaseData) => {
     data: envase
   };
 
+  console.log('Payload enviado:', JSON.stringify(payload, null, 2));
+
   const response = await fetch('http://apibd.uaalze.com/dynamic/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

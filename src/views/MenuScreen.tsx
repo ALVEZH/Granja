@@ -24,7 +24,7 @@ type MenuScreenNavigationProp = NativeStackNavigationProp<
 
 export default function MenuScreen() {
   const navigation = useNavigation<MenuScreenNavigationProp>();
-  const { seccionSeleccionada } = useSeccion();
+  const { seccionSeleccionada, setSeccionSeleccionada } = useSeccion();
   // Estado local para marcar vistas llenadas
   const [completado, setCompletado] = useState({
     Produccion: false,
@@ -32,6 +32,25 @@ export default function MenuScreen() {
     Existencia: false,
     Envase: false,
   });
+
+  // Lógica de cierre de sesión
+  const handleCerrarSesion = () => {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Quieres cerrar la sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar sesión',
+          style: 'destructive',
+          onPress: () => {
+            setSeccionSeleccionada?.(null);
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          }
+        }
+      ]
+    );
+  };
 
   // Actualizar estado de completado al volver al menú (puedes personalizar la lógica)
   useFocusEffect(
@@ -57,7 +76,9 @@ export default function MenuScreen() {
           <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>
         <Text style={styles.title}>Menú</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity onPress={handleCerrarSesion} style={{ marginLeft: 10 }}>
+          <Image source={require('../../assets/Iconos/CerrarSesion.png')} style={{ width: 28, height: 28 }} resizeMode="contain" />
+        </TouchableOpacity>
       </View>
       {/* Texto de sección actual */}
       <Text style={{ textAlign: 'center', color: '#517aa2', fontSize: 16, marginBottom: 10 }}>

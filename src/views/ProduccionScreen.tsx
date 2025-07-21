@@ -53,7 +53,7 @@ export default function ProduccionScreen() {
   // Cargar datos existentes cuando cambian las casetas o la fecha
   useEffect(() => {
     if (!casetasFiltradas || !granjaId) return;
-    
+    setGuardado(false); // Reiniciar el estado de guardado al entrar
     const cargarDatosExistentes = async () => {
       try {
         const datosExistentes = await DatabaseQueries.getProduccionByFecha(fechaHoy, granjaId);
@@ -176,34 +176,72 @@ export default function ProduccionScreen() {
   // Estado para saber si los datos ya se guardaron
   const [guardado, setGuardado] = useState(false);
 
-  // Bloquear navegación por el botón de la flecha si no se ha guardado
+  // Declarar el listener fuera para poder removerlo
+  const onBeforeRemove = (e: any) => {
+    if (guardado) {
+      // Permitir salir sin alerta si los datos acaban de guardarse
+      return;
+    }
+    if (hayDatosIngresados()) {
+      e.preventDefault();
+      Alert.alert(
+        'Atención',
+        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
+        [
+          { text: 'OK', style: 'cancel' }
+        ]
+      );
+    }
+    // Si no hay datos, permite salir normalmente
+  };
+
+  // Determinar si hay datos ingresados en la tabla
+  const hayDatosIngresados = () => {
+    return casetasFiltradas.some(caseta =>
+      tiposHuevo.some(tipo => {
+        const datosTipo = tabla[caseta.Nombre]?.[tipo] || { cajas: '', restos: '' };
+        return (
+          (datosTipo.cajas !== '' && datosTipo.cajas !== '0') ||
+          (datosTipo.restos !== '' && datosTipo.restos !== '0')
+        );
+      })
+    );
+  };
+
   useFocusEffect(
     React.useCallback(() => {
-      const onBeforeRemove = (e: any) => {
-        if (guardado) return;
-        e.preventDefault();
-        Alert.alert(
-          '¡Atención!',
-          'Debes guardar los datos antes de salir de la pantalla de producción.',
-          [
-            { text: 'OK', style: 'cancel' }
-          ]
-        );
+      const unsubscribe = navigation.addListener('beforeRemove', onBeforeRemove);
+      return () => {
+        unsubscribe();
       };
-      navigation.addListener('beforeRemove', onBeforeRemove);
-      return () => navigation.removeListener('beforeRemove', onBeforeRemove);
-    }, [guardado, navigation])
+    }, [navigation, tabla, casetasFiltradas, guardado])
   );
+
+  // Limpiar la tabla local solo al desmontar el componente
+  React.useEffect(() => {
+    return () => {
+      setTabla(() => {
+        const obj: Record<string, CasetaProduccion> = {};
+        casetasFiltradas.forEach(caseta => {
+          obj[caseta.Nombre] = {};
+          tiposHuevo.forEach(tipo => {
+            obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
+          });
+        });
+        return obj;
+      });
+    };
+  }, []);
 
   // 2. Función para verificar si una caseta está completa
   const isCasetaCompleta = (casetaNombre: string) => {
     const datosCaseta = tabla[casetaNombre] || {};
-    // Una caseta está completa si TODOS los tipos tienen cajas y restos NO vacíos y NO son cero
-    return tiposHuevo.every(tipo => {
+    // Una caseta está "completa" si al menos un campo tiene datos distintos de vacío o cero
+    return tiposHuevo.some(tipo => {
       const datosTipo = datosCaseta[tipo] || { cajas: '', restos: '' };
       return (
-        datosTipo.cajas !== '' && datosTipo.cajas !== '0' &&
-        datosTipo.restos !== '' && datosTipo.restos !== '0'
+        (datosTipo.cajas !== '' && datosTipo.cajas !== '0') ||
+        (datosTipo.restos !== '' && datosTipo.restos !== '0')
       );
     });
   };
@@ -214,24 +252,34 @@ export default function ProduccionScreen() {
       Alert.alert('Error', 'No se ha seleccionado una sección.');
       return;
     }
-    // Verificar si hay casetas incompletas
-    const casetasIncompletas = casetasFiltradas.filter(c => !isCasetaCompleta(c.Nombre));
-    if (casetasIncompletas.length > 0) {
+    await guardarProduccion(false);
+    // Limpiar la tabla local después de guardar
+    setTabla(() => {
+      const obj: Record<string, CasetaProduccion> = {};
+      casetasFiltradas.forEach(caseta => {
+        obj[caseta.Nombre] = {};
+        tiposHuevo.forEach(tipo => {
+          obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
+        });
+      });
+      return obj;
+    });
+    setGuardado(true);
+  };
+
+  // Botón para continuar (redirigir al menú solo si no hay datos sin guardar)
+  const handleContinuar = () => {
+    if (hayDatosIngresados()) {
       Alert.alert(
-        'Faltan casetas por rellenar',
-        'Hay casetas que no están completamente llenas. ¿Seguro que quieres continuar?',
+        'Atención',
+        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
         [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Continuar',
-            style: 'destructive',
-            onPress: () => guardarProduccion(true)
-          }
+          { text: 'OK', style: 'cancel' }
         ]
       );
       return;
     }
-    await guardarProduccion(false);
+    navigation.replace('Menu');
   };
 
   // Función auxiliar para guardar los datos
@@ -271,6 +319,21 @@ export default function ProduccionScreen() {
       }
       setGuardado(true);
       Alert.alert('Éxito', 'Datos de producción guardados correctamente.');
+      // Limpiar la tabla local después de guardar (pero NO borrar los datos locales)
+      setTabla(() => {
+        const obj: Record<string, CasetaProduccion> = {};
+        casetasFiltradas.forEach(caseta => {
+          obj[caseta.Nombre] = {};
+          tiposHuevo.forEach(tipo => {
+            obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
+          });
+        });
+        return obj;
+      });
+      // Desactivar el listener antes de navegar
+      if (navigation.removeListener && typeof onBeforeRemove === 'function') {
+        navigation.removeListener('beforeRemove', onBeforeRemove);
+      }
       navigation.replace('Menu');
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar los datos.');
@@ -363,7 +426,9 @@ export default function ProduccionScreen() {
                 style={[
                   styles.casetaBlock,
                   idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd,
-                  completa && { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
+                  completa
+                    ? { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 }
+                    : styles.casetaBlockRoja,
                 ]}
               >
                 <TouchableOpacity onPress={() => toggleCaseta(caseta.Nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
@@ -373,37 +438,37 @@ export default function ProduccionScreen() {
                 {casetasAbiertas[caseta.Nombre] && (
                   <ScrollView horizontal contentContainerStyle={styles.casetaContent} showsHorizontalScrollIndicator={false}>
                     <View>
-                      {tiposHuevo.map(tipo => {
-                        const datosTipo = (datosCaseta && datosCaseta[tipo]) ? datosCaseta[tipo] : { cajas: '', restos: '' };
-                        return (
-                          <View key={tipo} style={styles.tipoRow}>
-                            <Text style={styles.tipoLabel}>{tipo}</Text>
-                            <View style={styles.inputGroup}>
-                              <View style={styles.inputPair}>
-                                <Text style={styles.inputLabel}>Cajas</Text>
-                                <TextInput
-                                  style={styles.inputCell}
-                                  value={datosTipo.cajas}
-                                  onChangeText={v => handleChange(caseta.Nombre, tipo, 'cajas', v)}
-                                  keyboardType="numeric"
-                                  placeholder="0"
-                                />
-                              </View>
-                              <View style={styles.inputPair}>
-                                <Text style={styles.inputLabel}>Restos</Text>
-                                <TextInput
-                                  style={styles.inputCell}
-                                  value={datosTipo.restos}
-                                  onChangeText={v => handleChange(caseta.Nombre, tipo, 'restos', v)}
-                                  keyboardType="numeric"
-                                  placeholder="0"
-                                />
-                              </View>
+                    {tiposHuevo.map(tipo => {
+                      const datosTipo = (datosCaseta && datosCaseta[tipo]) ? datosCaseta[tipo] : { cajas: '', restos: '' };
+                      return (
+                        <View key={tipo} style={styles.tipoRow}>
+                          <Text style={styles.tipoLabel}>{tipo}</Text>
+                          <View style={styles.inputGroup}>
+                            <View style={styles.inputPair}>
+                              <Text style={styles.inputLabel}>Cajas</Text>
+                              <TextInput
+                                style={styles.inputCell}
+                                value={datosTipo.cajas}
+                                onChangeText={v => handleChange(caseta.Nombre, tipo, 'cajas', v)}
+                                keyboardType="numeric"
+                                placeholder="0"
+                              />
+                            </View>
+                            <View style={styles.inputPair}>
+                              <Text style={styles.inputLabel}>Restos</Text>
+                              <TextInput
+                                style={styles.inputCell}
+                                value={datosTipo.restos}
+                                onChangeText={v => handleChange(caseta.Nombre, tipo, 'restos', v)}
+                                keyboardType="numeric"
+                                placeholder="0"
+                              />
                             </View>
                           </View>
-                        );
-                      })}
-                    </View>
+                        </View>
+                      );
+                    })}
+                  </View>
                   </ScrollView>
                 )}
               </View>
@@ -420,9 +485,14 @@ export default function ProduccionScreen() {
               </View>
             ))}
           </View>
-          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
-            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 24 }}>
+            <TouchableOpacity style={styles.guardarButton} onPress={handleGuardar}>
+              <Text style={styles.guardarButtonText}>Guardar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.continuarButton} onPress={handleContinuar}>
+              <Text style={styles.continuarButtonText}>Continuar</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -463,6 +533,7 @@ const styles = StyleSheet.create({
   casetaBlock: { borderRadius: 10, margin: 10, padding: 0, elevation: 2, overflow: 'hidden' },
   casetaBlockEven: { backgroundColor: '#f4f8fd' },
   casetaBlockOdd: { backgroundColor: '#e0e7ef' },
+  casetaBlockRoja: { backgroundColor: '#ffd6d6', borderColor: '#e53935', borderWidth: 2, shadowColor: '#e53935', shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
   casetaHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: '#c7d7ee' },
   casetaTitle: { fontSize: 16, fontWeight: 'bold', color: '#2a3a4b' },
   caret: { fontSize: 18, color: '#2a3a4b', marginLeft: 8 },
@@ -506,4 +577,30 @@ const styles = StyleSheet.create({
   totalesCell: { marginLeft: 10, fontSize: 13, color: '#333' },
   btnGuardar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center' },
   btnGuardarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  guardarButton: {
+    flex: 1,
+    backgroundColor: '#1db954',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  guardarButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  continuarButton: {
+    flex: 1,
+    backgroundColor: '#007bff',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  continuarButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });

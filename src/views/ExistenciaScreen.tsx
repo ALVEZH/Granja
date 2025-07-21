@@ -122,65 +122,92 @@ export default function ExistenciaScreen() {
   // Estado para evitar doble guardado
   const [guardando, setGuardando] = useState(false);
 
-  // Bloquear navegación por el botón de la flecha si no se ha guardado
+  // Función para saber si hay algún dato ingresado en cualquier input
+  const hayDatosIngresados = () => {
+    return casetasFiltradas.some(caseta => {
+      const datos = tabla[caseta.Nombre] || { existenciaInicial: '', entrada: '', mortalidad: '', salida: '', edad: '', existenciaFinal: '0' };
+      return (
+        (datos.existenciaInicial !== '' && datos.existenciaInicial !== '0') ||
+        (datos.entrada !== '' && datos.entrada !== '0') ||
+        (datos.mortalidad !== '' && datos.mortalidad !== '0') ||
+        (datos.salida !== '' && datos.salida !== '0') ||
+        (datos.edad !== '' && datos.edad !== '0')
+      );
+    });
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       const onBeforeRemove = (e: any) => {
-        if (guardado) return;
-        e.preventDefault();
-        Alert.alert(
-          '¡Atención!',
-          'Debes guardar los datos antes de salir de la pantalla de existencia.',
-          [
-            { text: 'OK', style: 'cancel' }
-          ]
-        );
+        if (hayDatosIngresados()) {
+          e.preventDefault();
+          Alert.alert(
+            'Atención',
+            'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
+            [
+              { text: 'OK', style: 'cancel' }
+            ]
+          );
+        }
+        // Si no hay datos, permite salir normalmente
       };
       navigation.addListener('beforeRemove', onBeforeRemove);
       return () => navigation.removeListener('beforeRemove', onBeforeRemove);
-    }, [guardado, navigation])
+    }, [navigation, tabla, casetasFiltradas])
   );
 
   // Función para verificar si una caseta está completa
-  const isCasetaCompleta = (casetaNombre: string) => {
-    const datos = tabla[casetaNombre] || {};
+  const isCasetaCompleta = (caseta: string | { Nombre: string }) => {
+    const nombre = typeof caseta === 'string' ? caseta : caseta.Nombre;
+    const datos = tabla[nombre] || {};
+    // Una caseta está "completa" si al menos un campo tiene datos distintos de vacío o cero
     return (
-      datos.existenciaInicial !== '' && datos.existenciaInicial !== '0' &&
-      datos.entrada !== '' && datos.entrada !== '0' &&
-      datos.mortalidad !== '' && datos.mortalidad !== '0' &&
-      datos.salida !== '' && datos.salida !== '0' &&
-      datos.edad !== '' && datos.edad !== '0'
+      (datos.existenciaInicial !== '' && datos.existenciaInicial !== '0') ||
+      (datos.entrada !== '' && datos.entrada !== '0') ||
+      (datos.mortalidad !== '' && datos.mortalidad !== '0') ||
+      (datos.salida !== '' && datos.salida !== '0') ||
+      (datos.edad !== '' && datos.edad !== '0') ||
+      (datos.existenciaFinal !== '' && datos.existenciaFinal !== '0')
     );
   };
 
   // Guardar datos en la base de datos
   const handleGuardar = async () => {
-    // Validar que al menos una caseta tenga algún campo lleno
-    const algunaCasetaLlena = casetas.some(caseta =>
-      tabla[caseta.Nombre].existenciaInicial || tabla[caseta.Nombre].entrada || tabla[caseta.Nombre].mortalidad || tabla[caseta.Nombre].salida || tabla[caseta.Nombre].edad || tabla[caseta.Nombre].existenciaFinal
-    );
-    if (!algunaCasetaLlena) {
-      Alert.alert('Error', 'Debes llenar al menos una caseta antes de continuar.');
+    if (!seccionSeleccionada) {
+      Alert.alert('Error', 'No se ha seleccionado una sección.');
       return;
     }
-    // Verificar si hay casetas incompletas
-    const casetasIncompletas = casetasFiltradas.filter(c => !isCasetaCompleta(c.Nombre));
-    if (casetasIncompletas.length > 0) {
+    await guardarExistencia(false);
+    // Limpiar la tabla local después de guardar (pero NO borrar los datos locales)
+    setTabla(() => {
+      const obj: Record<string, CasetaExistencia> = {};
+      casetasFiltradas.forEach(caseta => {
+        obj[caseta.Nombre] = {
+          existenciaInicial: '',
+          entrada: '',
+          mortalidad: '',
+          salida: '',
+          edad: '',
+          existenciaFinal: '0',
+        };
+      });
+      return obj;
+    });
+    setGuardado(true);
+  };
+
+  const handleContinuar = () => {
+    if (hayDatosIngresados()) {
       Alert.alert(
-        'Faltan casetas por rellenar',
-        'Hay casetas que no están completamente llenas. ¿Seguro que quieres continuar?',
+        'Atención',
+        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
         [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Continuar',
-            style: 'destructive',
-            onPress: () => guardarExistencia(true)
-          }
+          { text: 'OK', style: 'cancel' }
         ]
       );
       return;
     }
-    await guardarExistencia(false);
+    navigation.replace('Menu');
   };
 
   // Función auxiliar para guardar los datos
@@ -265,7 +292,8 @@ export default function ExistenciaScreen() {
           {loadingCasetas && <Text>Cargando casetas...</Text>}
           {errorCasetas && <Text style={{ color: 'red' }}>{errorCasetas}</Text>}
           {casetasFiltradas.map((caseta, idx) => {
-            const datos = tabla[caseta.Nombre] || {
+            const nombre = typeof caseta === 'string' ? caseta : caseta.Nombre;
+            const datos = tabla[nombre] || {
               existenciaInicial: '',
               entrada: '',
               mortalidad: '',
@@ -273,25 +301,30 @@ export default function ExistenciaScreen() {
               edad: '',
               existenciaFinal: '0',
             };
-            const completa = isCasetaCompleta(caseta.Nombre);
+            const completa = isCasetaCompleta(nombre);
             return (
-              <View key={caseta.Nombre} style={[
-                styles.casetaBlock,
-                idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd,
-                completa && { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
-              ]}>
-                <TouchableOpacity onPress={() => toggleCaseta(caseta.Nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
-                  <Text style={styles.casetaTitle}>{caseta.Nombre}</Text>
-                  <Text style={styles.caret}>{casetasAbiertas[caseta.Nombre] ? '\u25b2' : '\u25bc'}</Text>
+              <View
+                key={nombre}
+                style={[
+                  styles.casetaBlock,
+                  idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd,
+                  completa
+                    ? { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 }
+                    : styles.casetaBlockRoja,
+                ]}
+              >
+                <TouchableOpacity onPress={() => toggleCaseta(nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
+                  <Text style={styles.casetaTitle}>{nombre}</Text>
+                  <Text style={styles.caret}>{casetasAbiertas[nombre] ? '\u25b2' : '\u25bc'}</Text>
                 </TouchableOpacity>
-                {casetasAbiertas[caseta.Nombre] && (
+                {casetasAbiertas[nombre] && (
                   <View style={styles.casetaContent}>
                     <View style={styles.inputRow}>
                       <Text style={styles.inputLabel}>Existencia Inicial</Text>
                       <TextInput
                         style={styles.inputCell}
                         value={datos.existenciaInicial}
-                        onChangeText={v => handleChange(caseta.Nombre, 'existenciaInicial', v)}
+                        onChangeText={v => handleChange(nombre, 'existenciaInicial', v)}
                         keyboardType="numeric"
                         placeholder="0"
                       />
@@ -301,7 +334,7 @@ export default function ExistenciaScreen() {
                       <TextInput
                         style={styles.inputCell}
                         value={datos.entrada}
-                        onChangeText={v => handleChange(caseta.Nombre, 'entrada', v)}
+                        onChangeText={v => handleChange(nombre, 'entrada', v)}
                         keyboardType="numeric"
                         placeholder="0"
                       />
@@ -311,7 +344,7 @@ export default function ExistenciaScreen() {
                       <TextInput
                         style={styles.inputCell}
                         value={datos.mortalidad}
-                        onChangeText={v => handleChange(caseta.Nombre, 'mortalidad', v)}
+                        onChangeText={v => handleChange(nombre, 'mortalidad', v)}
                         keyboardType="numeric"
                         placeholder="0"
                       />
@@ -321,7 +354,7 @@ export default function ExistenciaScreen() {
                       <TextInput
                         style={styles.inputCell}
                         value={datos.salida}
-                        onChangeText={v => handleChange(caseta.Nombre, 'salida', v)}
+                        onChangeText={v => handleChange(nombre, 'salida', v)}
                         keyboardType="numeric"
                         placeholder="0"
                       />
@@ -331,7 +364,7 @@ export default function ExistenciaScreen() {
                       <TextInput
                         style={styles.inputCell}
                         value={datos.edad}
-                        onChangeText={v => handleChange(caseta.Nombre, 'edad', v)}
+                        onChangeText={v => handleChange(nombre, 'edad', v)}
                         keyboardType="numeric"
                         placeholder="0"
                       />
@@ -361,9 +394,14 @@ export default function ExistenciaScreen() {
               <Text style={styles.totalesCell}>Final: {totales.existenciaFinal}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
-            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 24 }}>
+            <TouchableOpacity style={styles.guardarButton} onPress={handleGuardar}>
+              <Text style={styles.guardarButtonText}>Guardar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.continuarButton} onPress={handleContinuar}>
+              <Text style={styles.continuarButtonText}>Continuar</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -429,6 +467,7 @@ const styles = StyleSheet.create({
   casetaBlock: { borderRadius: 10, margin: 10, padding: 0, elevation: 2, overflow: 'hidden' },
   casetaBlockEven: { backgroundColor: '#f4f8fd' },
   casetaBlockOdd: { backgroundColor: '#e0e7ef' },
+  casetaBlockRoja: { backgroundColor: '#ffd6d6', borderColor: '#e53935', borderWidth: 2, shadowColor: '#e53935', shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
   casetaHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: '#c7d7ee' },
   casetaTitle: { fontSize: 16, fontWeight: 'bold', color: '#2a3a4b' },
   caret: { fontSize: 18, color: '#2a3a4b', marginLeft: 8 },
@@ -461,5 +500,31 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexWrap: 'wrap',
     maxWidth: '100%',
+  },
+  guardarButton: {
+    flex: 1,
+    backgroundColor: '#1db954',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  guardarButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  continuarButton: {
+    flex: 1,
+    backgroundColor: '#007bff',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  continuarButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });

@@ -12,6 +12,8 @@ import { useProduccionSync } from '../hooks/useProduccionSync';
 import { useAlimentoSync } from '../hooks/useAlimentoSync';
 import { syncExistencia } from '../util/existenciasApi';
 import { syncEnvase } from '../util/envaseApi';
+import Modal from 'react-native-modal';
+import { ScrollView as RNScrollView } from 'react-native';
 
 const columnasProduccion = [
   { label: 'BLANCO', key: 'blanco' },
@@ -29,6 +31,198 @@ const envases = [
   'CONO', 'CONO 240 PZS', 'CONO ESTRELLA', 'CINTA', 'CINTA BLANCA'
 ];
 
+const COL_WIDTH = 120; // Aumentar el ancho de las celdas para inputs
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
+  headerSafeArea: {
+    backgroundColor: '#eaf1f9',
+    paddingTop: 32,
+    paddingBottom: 4,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 2,
+    flexWrap: 'wrap',
+    backgroundColor: '#e0e7ef',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomWidth: 1,
+    borderColor: '#b0b0b0',
+  },
+  backButton: {
+    padding: 6,
+    width: 40,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2a3a4b',
+    textAlign: 'center',
+    flex: 1,
+    letterSpacing: 1,
+    marginHorizontal: 4,
+  },
+  headerFecha: {
+    fontSize: 15,
+    color: '#517aa2',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginTop: 18, marginBottom: 6, color: '#517aa2', textAlign: 'left', marginLeft: 12 },
+  table: {
+    borderWidth: 1,
+    borderColor: '#b0b0b0',
+    borderRadius: 8,
+    margin: 8,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  headerCell: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    paddingVertical: 8,
+    paddingHorizontal: 0, // Sin padding extra
+    width: COL_WIDTH,
+    textAlign: 'center', // Centrado para todas las celdas
+    color: '#222',
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+    backgroundColor: '#e0e7ef',
+  },
+  dataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f8fafc',
+  },
+  dataRowAlt: {
+    backgroundColor: '#eaf1f9',
+  },
+  casetaCell: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    width: COL_WIDTH,
+    textAlign: 'center', // Centrado para alineación perfecta
+    color: '#333',
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+    paddingVertical: 6,
+    paddingHorizontal: 0, // Sin padding extra
+  },
+  inputCell: {
+    fontSize: 16, // Aumentar tamaño de fuente
+    color: '#222',
+    width: COL_WIDTH,
+    minWidth: 80,
+    textAlign: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+  },
+  btnExportar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
+  btnExportarText: { color: '#fff', fontWeight: 'bold', fontSize: 16, marginLeft: 10 },
+  resumenIcon: { width: 28, height: 28 },
+  inputFirma: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 6, padding: 8, marginBottom: 6, backgroundColor: '#fff', fontSize: 13 },
+  casetaCellHeader: {
+    textAlign: 'left',
+    paddingHorizontal: 12,
+    width: COL_WIDTH,
+    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#222',
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+    backgroundColor: '#e0e7ef',
+  },
+  cell: {
+    width: COL_WIDTH,
+    minWidth: 80,
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 6,
+    paddingHorizontal: 4, // Un poco de padding horizontal
+  },
+  cellHeader: {
+    width: COL_WIDTH,
+    borderRightWidth: 1,
+    borderColor: '#b0b0b0',
+    backgroundColor: '#e0e7ef',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  cellText: {
+    fontSize: 13,
+    color: '#222',
+    textAlign: 'center',
+  },
+  cellHeaderText: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#222',
+    textAlign: 'center',
+  },
+  firmaBtn: {
+    backgroundColor: '#007bff',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  firmaBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  firmaMiniatura: {
+    width: 120,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    marginBottom: 8,
+    backgroundColor: '#fff',
+  },
+  firmaCard: {
+    width: 220,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 14,
+    marginRight: 16,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  firmaCardTitle: {
+    fontWeight: 'bold',
+    fontSize: 15,
+    marginBottom: 4,
+    color: '#333',
+  },
+  firmaCardNombre: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 8,
+    textAlign: 'center',
+    minHeight: 20,
+    maxHeight: 60,
+  },
+});
+
 export default function ResumenSeccion() {
   // const route = useRoute();
   // const navigation = useNavigation();
@@ -44,11 +238,19 @@ export default function ResumenSeccion() {
   const [envase, setEnvase] = useState<any[]>([]);
   // Estados para nombres y firmas
   const [nombreEncargado, setNombreEncargado] = useState('');
-  const [firmaEncargado, setFirmaEncargado] = useState('');
   const [nombreSupervisor, setNombreSupervisor] = useState('');
-  const [firmaSupervisor, setFirmaSupervisor] = useState('');
   const [nombreChofer, setNombreChofer] = useState('');
-  const [firmaChofer, setFirmaChofer] = useState('');
+  const [observaciones, setObservaciones] = useState('');
+
+  // Nuevo: estados para modales de nombre y observaciones
+  const [modalNombre, setModalNombre] = useState<null | 'encargado' | 'supervisor' | 'chofer'>(null);
+  const [modalObservaciones, setModalObservaciones] = useState(false);
+
+  // Handlers para abrir/cerrar modales de nombre y observaciones
+  const openNombreModal = (tipo: 'encargado' | 'supervisor' | 'chofer') => setModalNombre(tipo);
+  const closeNombreModal = () => setModalNombre(null);
+  const openObservacionesModal = () => setModalObservaciones(true);
+  const closeObservacionesModal = () => setModalObservaciones(false);
 
   // Obtener las casetas de la sección seleccionada (usando useCasetas si es necesario)
   const granjaId = seccionSeleccionada?.GranjaID ?? null;
@@ -701,153 +903,10 @@ export default function ResumenSeccion() {
             <Text style={{ fontSize: 14, color: '#6c757d', textAlign: 'center' }}>{syncStatusAlimento}</Text>
           </View>
         ) : null}
-        {/* Inputs de firmas y nombres eliminados */}
+        {/* Eliminar la sección de botones y modales de nombres y observaciones */}
       </ScrollView>
+      {/* Eliminar el RNScrollView con los botones de encargado, supervisor, chofer y observaciones */}
+      {/* Eliminar los modales de edición de nombre y observaciones */}
     </SafeAreaView>
   );
 }
-
-// Cambia los estilos de las tablas y celdas para mejor alineación y legibilidad
-const COL_WIDTH = 120; // Aumentar el ancho de las celdas para inputs
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#eaf1f9' },
-  headerSafeArea: {
-    backgroundColor: '#eaf1f9',
-    paddingTop: 32,
-    paddingBottom: 4,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 2,
-    flexWrap: 'wrap',
-    backgroundColor: '#e0e7ef',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderBottomWidth: 1,
-    borderColor: '#b0b0b0',
-  },
-  backButton: {
-    padding: 6,
-    width: 40,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2a3a4b',
-    textAlign: 'center',
-    flex: 1,
-    letterSpacing: 1,
-    marginHorizontal: 4,
-  },
-  headerFecha: {
-    fontSize: 15,
-    color: '#517aa2',
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginTop: 18, marginBottom: 6, color: '#517aa2', textAlign: 'left', marginLeft: 12 },
-  table: {
-    borderWidth: 1,
-    borderColor: '#b0b0b0',
-    borderRadius: 8,
-    margin: 8,
-    backgroundColor: '#fff',
-    overflow: 'hidden',
-  },
-  headerCell: {
-    fontWeight: 'bold',
-    fontSize: 13,
-    paddingVertical: 8,
-    paddingHorizontal: 0, // Sin padding extra
-    width: COL_WIDTH,
-    textAlign: 'center', // Centrado para todas las celdas
-    color: '#222',
-    borderRightWidth: 1,
-    borderColor: '#b0b0b0',
-    backgroundColor: '#e0e7ef',
-  },
-  dataRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f8fafc',
-  },
-  dataRowAlt: {
-    backgroundColor: '#eaf1f9',
-  },
-  casetaCell: {
-    fontWeight: 'bold',
-    fontSize: 13,
-    width: COL_WIDTH,
-    textAlign: 'center', // Centrado para alineación perfecta
-    color: '#333',
-    borderRightWidth: 1,
-    borderColor: '#b0b0b0',
-    paddingVertical: 6,
-    paddingHorizontal: 0, // Sin padding extra
-  },
-  inputCell: {
-    fontSize: 16, // Aumentar tamaño de fuente
-    color: '#222',
-    width: COL_WIDTH,
-    minWidth: 80,
-    textAlign: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    borderRightWidth: 1,
-    borderColor: '#b0b0b0',
-  },
-  btnExportar: { backgroundColor: '#749BC2', borderRadius: 8, margin: 16, padding: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
-  btnExportarText: { color: '#fff', fontWeight: 'bold', fontSize: 16, marginLeft: 10 },
-  resumenIcon: { width: 28, height: 28 },
-  inputFirma: { borderWidth: 1, borderColor: '#b0b0b0', borderRadius: 6, padding: 8, marginBottom: 6, backgroundColor: '#fff', fontSize: 13 },
-  casetaCellHeader: {
-    textAlign: 'left',
-    paddingHorizontal: 12,
-    width: COL_WIDTH,
-    fontWeight: 'bold',
-    fontSize: 13,
-    color: '#222',
-    borderRightWidth: 1,
-    borderColor: '#b0b0b0',
-    backgroundColor: '#e0e7ef',
-  },
-  cell: {
-    width: COL_WIDTH,
-    minWidth: 80,
-    borderRightWidth: 1,
-    borderColor: '#b0b0b0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingVertical: 6,
-    paddingHorizontal: 4, // Un poco de padding horizontal
-  },
-  cellHeader: {
-    width: COL_WIDTH,
-    borderRightWidth: 1,
-    borderColor: '#b0b0b0',
-    backgroundColor: '#e0e7ef',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  cellText: {
-    fontSize: 13,
-    color: '#222',
-    textAlign: 'center',
-  },
-  cellHeaderText: {
-    fontWeight: 'bold',
-    fontSize: 13,
-    color: '#222',
-    textAlign: 'center',
-  },
-});

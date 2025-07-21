@@ -142,33 +142,48 @@ export default function AlimentoScreen() {
   // Estado para evitar doble guardado
   const [guardando, setGuardando] = useState(false);
 
-  // Bloquear navegación por el botón de la flecha si no se ha guardado
+  // Función para saber si hay algún dato ingresado en cualquier input
+  const hayDatosIngresados = () => {
+    return casetasFiltradas.some(caseta => {
+      const datos = tabla[caseta.Nombre] || { existenciaInicial: '', entrada: '', consumo: '', tipo: '' };
+      return (
+        (datos.existenciaInicial !== '' && datos.existenciaInicial !== '0') ||
+        (datos.entrada !== '' && datos.entrada !== '0') ||
+        (datos.consumo !== '' && datos.consumo !== '0') ||
+        (datos.tipo && datos.tipo.trim() !== '')
+      );
+    });
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       const onBeforeRemove = (e: any) => {
-        if (guardado) return;
-        e.preventDefault();
-        Alert.alert(
-          '¡Atención!',
-          'Debes guardar los datos antes de salir de la pantalla de alimentos.',
-          [
-            { text: 'OK', style: 'cancel' }
-          ]
-        );
+        if (hayDatosIngresados()) {
+          e.preventDefault();
+          Alert.alert(
+            'Atención',
+            'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
+            [
+              { text: 'OK', style: 'cancel' }
+            ]
+          );
+        }
+        // Si no hay datos, permite salir normalmente
       };
       navigation.addListener('beforeRemove', onBeforeRemove);
       return () => navigation.removeListener('beforeRemove', onBeforeRemove);
-    }, [guardado, navigation])
+    }, [navigation, tabla, casetasFiltradas])
   );
 
   // Función para verificar si una caseta está completa
   const isCasetaCompleta = (casetaNombre: string) => {
     const datosCaseta = tabla[casetaNombre] || {};
+    // Una caseta está "completa" si al menos un campo tiene datos distintos de vacío o cero
     return (
-      datosCaseta.existenciaInicial !== '' && datosCaseta.existenciaInicial !== '0' &&
-      datosCaseta.entrada !== '' && datosCaseta.entrada !== '0' &&
-      datosCaseta.consumo !== '' && datosCaseta.consumo !== '0' &&
-      datosCaseta.tipo && datosCaseta.tipo.trim() !== ''
+      (datosCaseta.existenciaInicial !== '' && datosCaseta.existenciaInicial !== '0') ||
+      (datosCaseta.entrada !== '' && datosCaseta.entrada !== '0') ||
+      (datosCaseta.consumo !== '' && datosCaseta.consumo !== '0') ||
+      (datosCaseta.tipo && datosCaseta.tipo.trim() !== '')
     );
   };
 
@@ -178,24 +193,35 @@ export default function AlimentoScreen() {
       Alert.alert('Error', 'No se ha seleccionado una sección.');
       return;
     }
-    // Verificar si hay casetas incompletas
-    const casetasIncompletas = casetasFiltradas.filter(c => !isCasetaCompleta(c.Nombre));
-    if (casetasIncompletas.length > 0) {
+    await guardarAlimentos(false);
+    // Limpiar la tabla local después de guardar (pero NO borrar los datos locales)
+    setTabla(() => {
+      const obj: Record<string, CasetaAlimento> = {};
+      casetasFiltradas.forEach(caseta => {
+        obj[caseta.Nombre] = {
+          existenciaInicial: '',
+          entrada: '',
+          consumo: '',
+          tipo: ''
+        };
+      });
+      return obj;
+    });
+    setGuardado(true);
+  };
+
+  const handleContinuar = () => {
+    if (hayDatosIngresados()) {
       Alert.alert(
-        'Faltan casetas por rellenar',
-        'Hay casetas que no están completamente llenas. ¿Seguro que quieres continuar?',
+        'Atención',
+        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
         [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Continuar',
-            style: 'destructive',
-            onPress: () => guardarAlimentos(true)
-          }
+          { text: 'OK', style: 'cancel' }
         ]
       );
       return;
     }
-    await guardarAlimentos(false);
+    navigation.replace('Menu');
   };
 
   // Función auxiliar para guardar los datos
@@ -263,11 +289,16 @@ export default function AlimentoScreen() {
             const datosCaseta = tabla[caseta.Nombre] || { existenciaInicial: '', entrada: '', consumo: '', tipo: '' };
             const completa = isCasetaCompleta(caseta.Nombre);
             return (
-              <View key={caseta.Nombre} style={[
-                styles.casetaBlock,
-                idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd,
-                completa && { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
-              ]}>
+              <View
+                key={caseta.Nombre}
+                style={[
+                  styles.casetaBlock,
+                  idx % 2 === 0 ? styles.casetaBlockEven : styles.casetaBlockOdd,
+                  completa
+                    ? { backgroundColor: '#b6f5c3', borderColor: '#1db954', borderWidth: 2, shadowColor: '#1db954', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 }
+                    : styles.casetaBlockRoja,
+                ]}
+              >
                 <TouchableOpacity onPress={() => toggleCaseta(caseta.Nombre)} style={styles.casetaHeader} activeOpacity={0.7}>
                   <Text style={styles.casetaTitle}>{caseta.Nombre}</Text>
                   <Text style={styles.caret}>{casetasAbiertas[caseta.Nombre] ? '\u25b2' : '\u25bc'}</Text>
@@ -327,9 +358,14 @@ export default function AlimentoScreen() {
               <Text style={styles.totalesCell}>Consumo: {totales.consumo}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
-            <Text style={styles.btnGuardarText}>Guardar y continuar</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 24 }}>
+            <TouchableOpacity style={styles.guardarButton} onPress={handleGuardar}>
+              <Text style={styles.guardarButtonText}>Guardar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.continuarButton} onPress={handleContinuar}>
+              <Text style={styles.continuarButtonText}>Continuar</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -370,6 +406,7 @@ const styles = StyleSheet.create({
   casetaBlock: { borderRadius: 10, margin: 10, padding: 0, elevation: 2, overflow: 'hidden' },
   casetaBlockEven: { backgroundColor: '#f4f8fd' },
   casetaBlockOdd: { backgroundColor: '#e0e7ef' },
+  casetaBlockRoja: { backgroundColor: '#ffd6d6', borderColor: '#e53935', borderWidth: 2, shadowColor: '#e53935', shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
   casetaHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: '#c7d7ee' },
   casetaTitle: { fontSize: 16, fontWeight: 'bold', color: '#2a3a4b' },
   caret: { fontSize: 18, color: '#2a3a4b', marginLeft: 8 },
@@ -457,4 +494,30 @@ const styles = StyleSheet.create({
   headerCell: { fontWeight: 'bold', fontSize: 13, padding: 6, minWidth: 90, textAlign: 'center', color: '#222' },
   dataRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
   casetaCell: { fontWeight: 'bold', fontSize: 13, minWidth: 70, textAlign: 'center', color: '#333' },
+  guardarButton: {
+    flex: 1,
+    backgroundColor: '#1db954',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  guardarButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  continuarButton: {
+    flex: 1,
+    backgroundColor: '#007bff',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  continuarButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });
