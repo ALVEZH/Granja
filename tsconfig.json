@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "jsx": "react-native",
-    "moduleResolution": "node",
     "target": "es2017",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

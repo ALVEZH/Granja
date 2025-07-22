@@ -105,9 +105,6 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>Iniciar Sesión</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity>
-              <Text style={styles.link}>¿Olvidaste tu contraseña?</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

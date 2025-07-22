@@ -12,17 +12,15 @@ export default function App() {
   const [dbError, setDbError] = React.useState<string | null>(null);
 
   useEffect(() => {
-    // Reiniciar y diagnosticar la base de datos al arrancar la app
+    // Inicializar la base de datos en segundo plano
     const resetAndDiagnoseDB = async () => {
       try {
         await dbManager.resetDatabase();
         await dbManager.diagnoseDatabase();
-        setDbReady(true);
         setDbError(null);
         console.log('Base de datos reiniciada y diagnosticada');
       } catch (error) {
         setDbError('Error al reiniciar o diagnosticar la base de datos.');
-        setDbReady(false);
         console.error('Error al reiniciar o diagnosticar la base de datos:', error);
       }
     };
@@ -37,14 +35,7 @@ export default function App() {
     );
   }
 
-  if (!dbReady) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 18 }}>Cargando base de datos...</Text>
-      </View>
-    );
-  }
-
+  // Mostrar la app inmediatamente, sin esperar a la base de datos
   return (
     <SeccionContext.Provider value={{ seccionSeleccionada, setSeccionSeleccionada }}>
       <AppNavigator />
