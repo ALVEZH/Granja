@@ -58,7 +58,7 @@ export const fetchFromDynamicApi = async ({
     body: JSON.stringify(payload)
   });
 
-  console.log('📥 Respuesta API:', response.status, response.statusText);
+  /* console.log('📥 Respuesta API:', response.status, response.statusText); */
 
   if (!response.ok) {
     const text = await response.text();
@@ -67,7 +67,7 @@ export const fetchFromDynamicApi = async ({
   }
 
   const result = await response.json();
-  console.log('✅ Resultado API:', result);
+  /* console.log('✅ Resultado API:', result); */
   
   return result.resultado || result;
 };

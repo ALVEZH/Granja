@@ -17,8 +17,8 @@ export default function App() {
       try {
         await dbManager.resetDatabase();
         await dbManager.diagnoseDatabase();
-        setDbError(null);
-        console.log('Base de datos reiniciada y diagnosticada');
+        setDbError(null);/* 
+        console.log('Base de datos reiniciada y diagnosticada'); */
       } catch (error) {
         setDbError('Error al reiniciar o diagnosticar la base de datos.');
         console.error('Error al reiniciar o diagnosticar la base de datos:', error);

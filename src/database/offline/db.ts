@@ -6,18 +6,18 @@ class DatabaseManager {
 
   async init(): Promise<void> {
     try {
-      console.log("Iniciando inicialización de base de datos...")
+      /* console.log("Iniciando inicialización de base de datos...") */
       this.db = await SQLite.openDatabaseAsync("granja.db")
-      console.log("Base de datos abierta:", this.db ? "OK" : "NULL")
+      /* console.log("Base de datos abierta:", this.db ? "OK" : "NULL") */
       
       if (!this.db) {
         throw new Error("No se pudo abrir la base de datos. El objeto db es null.")
       }
       
-      console.log("Ejecutando createTables...")
+      /* console.log("Ejecutando createTables...") */
       try {
         await this.db.execAsync(createTables)
-        console.log("createTables ejecutado correctamente")
+        /* console.log("createTables ejecutado correctamente") */
       } catch (sqlError) {
         console.error("Error ejecutando createTables:", sqlError)
         // No relanzar el error, continuar con las migraciones
@@ -29,7 +29,7 @@ class DatabaseManager {
         console.log("Migración: Columna edad agregada a tabla existencia")
       } catch (migrationError) {
         // Si la columna ya existe, ignorar el error
-        console.log("Columna edad ya existe en tabla existencia")
+        /* console.log("Columna edad ya existe en tabla existencia") */
       }
       
       // Migraciones para agregar columna granja_id a todas las tablas
@@ -37,14 +37,14 @@ class DatabaseManager {
       for (const tabla of tablas) {
         try {
           await this.db.execAsync(`ALTER TABLE ${tabla} ADD COLUMN granja_id INTEGER DEFAULT 1`)
-          console.log(`Migración: Columna granja_id agregada a tabla ${tabla}`)
+          /* console.log(`Migración: Columna granja_id agregada a tabla ${tabla}`) */
         } catch (migrationError) {
           // Si la columna ya existe, ignorar el error
-          console.log(`Columna granja_id ya existe en tabla ${tabla}`)
+          /* console.log(`Columna granja_id ya existe en tabla ${tabla}`) */
         }
       }
       
-      console.log("Base de datos inicializada correctamente")
+      /* console.log("Base de datos inicializada correctamente") */
     } catch (error) {
       console.error("Error al inicializar la base de datos:", error)
       // No relanzar el error para evitar que la app crashee
@@ -66,7 +66,7 @@ class DatabaseManager {
   }
 
   async resetDatabase(): Promise<void> {
-    console.log("Reiniciando base de datos...")
+    /* console.log("Reiniciando base de datos...") */
     try {
       // Cerrar la base de datos actual si está abierta
       if (this.db) {
@@ -80,21 +80,21 @@ class DatabaseManager {
       await new Promise(resolve => setTimeout(resolve, 1000))
       
       // Eliminar el archivo de base de datos
-      console.log("Eliminando archivo de base de datos...")
+      /* console.log("Eliminando archivo de base de datos...") */
       await SQLite.deleteDatabaseAsync("granja.db")
-      console.log("Base de datos eliminada")
+      /* console.log("Base de datos eliminada") */
       
       // Reinicializar
-      console.log("Reinicializando base de datos...")
+      /* console.log("Reinicializando base de datos...") */
       await this.init()
-      console.log("Base de datos reiniciada correctamente")
+      /* console.log("Base de datos reiniciada correctamente") */
     } catch (error) {
       console.error("Error al reiniciar la base de datos:", error)
       // Intentar reinicializar de todas formas
       try {
-        console.log("Intentando reinicializar después del error...")
+        /* console.log("Intentando reinicializar después del error...") */
         await this.init()
-        console.log("Base de datos reinicializada después del error")
+        /* console.log("Base de datos reinicializada después del error") */
       } catch (initError) {
         console.error("Error al reinicializar después del error:", initError)
       }
@@ -127,7 +127,7 @@ class DatabaseManager {
 
   // Nueva función de diagnóstico
   async diagnoseDatabase(): Promise<void> {
-    console.log("=== DIAGNÓSTICO DE BASE DE DATOS ===")
+    /* console.log("=== DIAGNÓSTICO DE BASE DE DATOS ===") */
     
     try {
       if (!this.db) {
@@ -139,28 +139,28 @@ class DatabaseManager {
         }
       }
       
-      console.log("✅ Base de datos inicializada")
+      /* console.log("✅ Base de datos inicializada") */
       
       // Verificar tablas existentes
       const tables = await this.db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'")
-      console.log("📋 Tablas existentes:", tables.map((t: any) => t.name))
+      /* console.log("📋 Tablas existentes:", tables.map((t: any) => t.name)) */
       
       // Verificar tabla alimento específicamente
       const alimentoTable = await this.db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table' AND name='alimento'")
       if (alimentoTable && alimentoTable.length > 0) {
-        console.log("✅ Tabla 'alimento' existe")
+        /* console.log("✅ Tabla 'alimento' existe") */
         
         // Verificar estructura de la tabla
         const columns = await this.db.getAllAsync("PRAGMA table_info(alimento)")
-        console.log("📋 Columnas de tabla alimento:", columns.map((c: any) => c.name))
+        /* console.log("📋 Columnas de tabla alimento:", columns.map((c: any) => c.name)) */
         
         // Verificar datos en la tabla
         const count = await this.db.getFirstAsync("SELECT COUNT(*) as count FROM alimento")
-        console.log("📊 Registros en tabla alimento:", (count as any)?.count || 0)
+        /* console.log("📊 Registros en tabla alimento:", (count as any)?.count || 0) */
         
         // Mostrar algunos registros de ejemplo
         const sample = await this.db.getAllAsync("SELECT * FROM alimento LIMIT 3")
-        console.log("📋 Registros de ejemplo:", sample)
+        /* console.log("📋 Registros de ejemplo:", sample) */
         
       } else {
         console.log("❌ Tabla 'alimento' NO existe")
@@ -169,7 +169,7 @@ class DatabaseManager {
       // Verificar permisos y conectividad
       try {
         await this.db.runAsync("SELECT 1")
-        console.log("✅ Permisos de lectura/escritura OK")
+        /* console.log("✅ Permisos de lectura/escritura OK") */
       } catch (permError) {
         console.log("❌ Error de permisos:", permError)
       }
@@ -178,7 +178,7 @@ class DatabaseManager {
       console.error("❌ Error en diagnóstico:", error)
     }
     
-    console.log("=== FIN DIAGNÓSTICO ===")
+    /* console.log("=== FIN DIAGNÓSTICO ===") */
   }
 }
 
