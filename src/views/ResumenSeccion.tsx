@@ -382,10 +382,6 @@ export default function ResumenSeccion() {
             else fallidos++;
           }
         }
-        if (fallidos > 0) {
-          Alert.alert('Error', `Error al sincronizar Existencia (${fallidos} fallidos). No se exportó el PDF.`);
-          return;
-        }
       } catch (error) {
         Alert.alert('Error', 'Error al sincronizar Existencia. No se exportó el PDF.');
         return;
@@ -418,93 +414,98 @@ export default function ResumenSeccion() {
         Alert.alert('Error', 'Error al sincronizar Envase. No se exportó el PDF.');
         return;
       }
-      // Si todo fue exitoso, exportar PDF
-      let html = `<html><head><style>
-        @page { size: A4 landscape; margin: 18px; }
-        body { font-family: Arial, sans-serif; font-size: 11px; }
-        .titulo { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 2px; letter-spacing: 1px; }
-        .subtitulo { text-align: center; font-size: 14px; margin-bottom: 8px; }
-        .encabezado { display: flex; flex-direction: row; justify-content: space-between; margin-bottom: 2px; font-size: 12px; }
-        .encabezado span { font-weight: bold; }
-        .tabla-prod { border-collapse: collapse; width: 100%; margin-bottom: 8px; }
-        .tabla-prod th, .tabla-prod td { border: 1px solid #333; padding: 2px 3px; text-align: center; font-size: 10px; }
-        .tabla-prod th { background: #e0e7ef; font-size: 10px; }
-        .tabla-bloque { font-weight: bold; font-size: 12px; margin: 6px 0 2px 0; text-align: left; }
-        .tablas-inferiores { display: flex; flex-direction: row; gap: 6px; margin-top: 2px; }
-        .tabla-mini { border-collapse: collapse; width: 100%; font-size: 9.5px; }
-        .tabla-mini th, .tabla-mini td { border: 1px solid #333; padding: 2px 2px; text-align: center; }
-        .tabla-mini th { background: #e0e7ef; font-size: 9.5px; }
-        .obs { margin: 10px 0 0 0; font-size: 10px; border: 1px solid #333; min-height: 22px; padding: 2px 6px; }
-        .firmas { margin-top: 12px; display: flex; flex-direction: row; justify-content: space-between; }
-        .firma-block { flex: 1; text-align: center; font-size: 10px; }
-        .firma-label { border-top: none; margin-top: 8px; padding-top: 2px; font-size: 9px; }
-        .firma-line { border-top: 1px solid #333; width: 70%; margin: 18px auto 2px auto; height: 0; }
-      </style></head><body>`;
-      html += `<div class='titulo'>UNION AGROPECUARIA ALZE SA DE CV.</div>`;
-      html += `<div class='subtitulo'>REPORTE DE PRODUCCIÓN DIARIA EN GRANJAS</div>`;
-      html += `<div class='encabezado'><span>SECCIÓN: ${seccionSeleccionada?.Nombre || ''}</span><span>FECHA: ${fecha}</span></div>`;
-      // PRODUCCIÓN
-      html += `<div class='tabla-bloque'>PRODUCCIÓN</div>`;
-      html += `<table class='tabla-prod'><tr><th rowspan='2'>CASETA</th>`;
-      columnasProduccion.forEach(col => {
-        html += `<th colspan='2'>${col.label}</th>`;
-      });
-      html += `</tr><tr>`;
-      columnasProduccion.forEach(() => {
-        html += `<th>Cajas</th><th>Restos</th>`;
-      });
-      html += `</tr>`;
-      casetasFiltradas.forEach(caseta => {
-        const row = produccion.find((r: any) => r.caseta === caseta.Nombre) || {};
-        html += `<tr><td>${caseta.Nombre}</td>`;
+      // Mostrar modal de exportación correcta
+      // setModalExportacion(true); // Eliminar esta línea
+      setTimeout(async () => {
+        // setModalExportacion(false); // Eliminar esta línea
+        // Si todo fue exitoso, exportar PDF
+        let html = `<html><head><style>
+          @page { size: A4 landscape; margin: 18px; }
+          body { font-family: Arial, sans-serif; font-size: 11px; }
+          .titulo { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 2px; letter-spacing: 1px; }
+          .subtitulo { text-align: center; font-size: 14px; margin-bottom: 8px; }
+          .encabezado { display: flex; flex-direction: row; justify-content: space-between; margin-bottom: 2px; font-size: 12px; }
+          .encabezado span { font-weight: bold; }
+          .tabla-prod { border-collapse: collapse; width: 100%; margin-bottom: 8px; }
+          .tabla-prod th, .tabla-prod td { border: 1px solid #333; padding: 2px 3px; text-align: center; font-size: 10px; }
+          .tabla-prod th { background: #e0e7ef; font-size: 10px; }
+          .tabla-bloque { font-weight: bold; font-size: 12px; margin: 6px 0 2px 0; text-align: left; }
+          .tablas-inferiores { display: flex; flex-direction: row; gap: 6px; margin-top: 2px; }
+          .tabla-mini { border-collapse: collapse; width: 100%; font-size: 9.5px; }
+          .tabla-mini th, .tabla-mini td { border: 1px solid #333; padding: 2px 2px; text-align: center; }
+          .tabla-mini th { background: #e0e7ef; font-size: 9.5px; }
+          .obs { margin: 10px 0 0 0; font-size: 10px; border: 1px solid #333; min-height: 22px; padding: 2px 6px; }
+          .firmas { margin-top: 12px; display: flex; flex-direction: row; justify-content: space-between; }
+          .firma-block { flex: 1; text-align: center; font-size: 10px; }
+          .firma-label { border-top: none; margin-top: 8px; padding-top: 2px; font-size: 9px; }
+          .firma-line { border-top: 1px solid #333; width: 70%; margin: 18px auto 2px auto; height: 0; }
+        </style></head><body>`;
+        html += `<div class='titulo'>UNION AGROPECUARIA ALZE SA DE CV.</div>`;
+        html += `<div class='subtitulo'>REPORTE DE PRODUCCIÓN DIARIA EN GRANJAS</div>`;
+        html += `<div class='encabezado'><span>SECCIÓN: ${seccionSeleccionada?.Nombre || ''}</span><span>FECHA: ${fecha}</span></div>`;
+        // PRODUCCIÓN
+        html += `<div class='tabla-bloque'>PRODUCCIÓN</div>`;
+        html += `<table class='tabla-prod'><tr><th rowspan='2'>CASETA</th>`;
         columnasProduccion.forEach(col => {
-          html += `<td>${row[`${col.key}_cajas`] || ''}</td><td>${row[`${col.key}_restos`] || ''}</td>`;
+          html += `<th colspan='2'>${col.label}</th>`;
+        });
+        html += `</tr><tr>`;
+        columnasProduccion.forEach(() => {
+          html += `<th>Cajas</th><th>Restos</th>`;
         });
         html += `</tr>`;
-      });
-      // Totales Producción
-      html += `<tr><td><b>TOTAL</b></td>`;
-      columnasProduccion.forEach(col => {
-        html += `<td><b>${totalesProduccion[col.key].cajas}</b></td><td><b>${totalesProduccion[col.key].restos}</b></td>`;
-      });
-      html += `</tr></table>`;
-      // Tablas inferiores alineadas horizontalmente
-      html += `<div class='tablas-inferiores'>`;
-      // ALIMENTO
-      html += `<div style='flex:1;'><div class='tabla-bloque'>ALIMENTO</div>`;
-      html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>CONSUMO</th><th>TIPO</th></tr>`;
-      casetasValidas.forEach(caseta => {
-        const row = alimento.find((r: any) => r.caseta === caseta) || {};
-        html += `<tr><td>${caseta}</td><td>${row.existencia_inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.consumo || ''}</td><td>${row.tipo || ''}</td></tr>`;
-      });
-      html += `<tr><td><b>TOTAL</b></td><td><b>${totalesAlimento?.existenciaInicial ?? 0}</b></td><td><b>${totalesAlimento?.entrada ?? 0}</b></td><td><b>${totalesAlimento?.consumo ?? 0}</b></td><td></td></tr></table></div>`;
-      // EXISTENCIA
-      html += `<div style='flex:1;'><div class='tabla-bloque'>EXISTENCIA</div>`;
-      html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>MORTALIDAD</th><th>SALIDA</th><th>EDAD</th><th>EXIST. FINAL</th></tr>`;
-      casetasValidas.forEach(caseta => {
-        const row = existencia.find((r: any) => r.caseta === caseta) || {};
-        html += `<tr><td>${caseta}</td><td>${row.inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.mortalidad || ''}</td><td>${row.salida || ''}</td><td>${row.edad || ''}</td><td>${row.final || ''}</td></tr>`;
-      });
-      html += `<tr><td><b>TOTAL</b></td><td><b>${totalesExistencia.inicial}</b></td><td><b>${totalesExistencia.entrada}</b></td><td><b>${totalesExistencia.mortalidad}</b></td><td><b>${totalesExistencia.salida}</b></td><td></td><td><b>${totalesExistencia.final}</b></td></tr></table></div>`;
-      // ENVASE
-      html += `<div style='flex:1;'><div class='tabla-bloque'>ENVASE</div>`;
-      html += `<table class='tabla-mini'><tr><th>TIPO</th><th>EXIST. INICIAL</th><th>RECIBIDO</th><th>CONSUMO</th><th>EXIST. FINAL</th></tr>`;
-      envases.forEach(envaseTipo => {
-        const row = envase.find((r: any) => r.tipo === envaseTipo) || {};
-        html += `<tr><td>${envaseTipo}</td><td>${row.inicial || ''}</td><td>${row.recibido || ''}</td><td>${row.consumo || ''}</td><td>${row.final || ''}</td></tr>`;
-      });
-      html += `<tr><td><b>TOTAL</b></td><td><b>${totalesEnvase.inicial}</b></td><td><b>${totalesEnvase.recibido}</b></td><td><b>${totalesEnvase.consumo}</b></td><td><b>${totalesEnvase.final}</b></td></tr></table></div>`;
-      html += `</div>`;
-      // OBSERVACIONES
-      html += `<div class='obs'>OBS.</div>`;
-      // FIRMAS SOLO LÍNEAS Y ETIQUETAS, CADA UNA INDEPENDIENTE
-      html += `<div class='firmas'>
-        <div class='firma-block'><div class='firma-line'></div><div class='firma-label'>FIRMA Y NOMBRE ENCARGADO</div></div>
-        <div class='firma-block'><div class='firma-line'></div><div class='firma-label'>FIRMA Y NOMBRE SUPERVISOR</div></div>
-        <div class='firma-block'><div class='firma-line'></div><div class='firma-label'>FIRMA Y NOMBRE DE CHOFER</div></div>
-      </div>`;
-      html += `</body></html>`;
-      await Print.printAsync({ html });
+        casetasFiltradas.forEach(caseta => {
+          const row = produccion.find((r: any) => r.caseta === caseta.Nombre) || {};
+          html += `<tr><td>${caseta.Nombre}</td>`;
+          columnasProduccion.forEach(col => {
+            html += `<td>${row[`${col.key}_cajas`] || ''}</td><td>${row[`${col.key}_restos`] || ''}</td>`;
+          });
+          html += `</tr>`;
+        });
+        // Totales Producción
+        html += `<tr><td><b>TOTAL</b></td>`;
+        columnasProduccion.forEach(col => {
+          html += `<td><b>${totalesProduccion[col.key].cajas}</b></td><td><b>${totalesProduccion[col.key].restos}</b></td>`;
+        });
+        html += `</tr></table>`;
+        // Tablas inferiores alineadas horizontalmente
+        html += `<div class='tablas-inferiores'>`;
+        // ALIMENTO
+        html += `<div style='flex:1;'><div class='tabla-bloque'>ALIMENTO</div>`;
+        html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>CONSUMO</th><th>TIPO</th></tr>`;
+        casetasValidas.forEach(caseta => {
+          const row = alimento.find((r: any) => r.caseta === caseta) || {};
+          html += `<tr><td>${caseta}</td><td>${row.existencia_inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.consumo || ''}</td><td>${row.tipo || ''}</td></tr>`;
+        });
+        html += `<tr><td><b>TOTAL</b></td><td><b>${totalesAlimento?.existenciaInicial ?? 0}</b></td><td><b>${totalesAlimento?.entrada ?? 0}</b></td><td><b>${totalesAlimento?.consumo ?? 0}</b></td><td></td></tr></table></div>`;
+        // EXISTENCIA
+        html += `<div style='flex:1;'><div class='tabla-bloque'>EXISTENCIA</div>`;
+        html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>MORTALIDAD</th><th>SALIDA</th><th>EDAD</th><th>EXIST. FINAL</th></tr>`;
+        casetasValidas.forEach(caseta => {
+          const row = existencia.find((r: any) => r.caseta === caseta) || {};
+          html += `<tr><td>${caseta}</td><td>${row.inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.mortalidad || ''}</td><td>${row.salida || ''}</td><td>${row.edad || ''}</td><td>${row.final || ''}</td></tr>`;
+        });
+        html += `<tr><td><b>TOTAL</b></td><td><b>${totalesExistencia.inicial}</b></td><td><b>${totalesExistencia.entrada}</b></td><td><b>${totalesExistencia.mortalidad}</b></td><td><b>${totalesExistencia.salida}</b></td><td></td><td><b>${totalesExistencia.final}</b></td></tr></table></div>`;
+        // ENVASE
+        html += `<div style='flex:1;'><div class='tabla-bloque'>ENVASE</div>`;
+        html += `<table class='tabla-mini'><tr><th>TIPO</th><th>EXIST. INICIAL</th><th>RECIBIDO</th><th>CONSUMO</th><th>EXIST. FINAL</th></tr>`;
+        envases.forEach(envaseTipo => {
+          const row = envase.find((r: any) => r.tipo === envaseTipo) || {};
+          html += `<tr><td>${envaseTipo}</td><td>${row.inicial || ''}</td><td>${row.recibido || ''}</td><td>${row.consumo || ''}</td><td>${row.final || ''}</td></tr>`;
+        });
+        html += `<tr><td><b>TOTAL</b></td><td><b>${totalesEnvase.inicial}</b></td><td><b>${totalesEnvase.recibido}</b></td><td><b>${totalesEnvase.consumo}</b></td><td><b>${totalesEnvase.final}</b></td></tr></table></div>`;
+        html += `</div>`;
+        // OBSERVACIONES
+        html += `<div class='obs'>OBS.</div>`;
+        // FIRMAS SOLO LÍNEAS Y ETIQUETAS, CADA UNA INDEPENDIENTE
+        html += `<div class='firmas'>
+          <div class='firma-block'><div class='firma-line'></div><div class='firma-label'>FIRMA Y NOMBRE ENCARGADO</div></div>
+          <div class='firma-block'><div class='firma-line'></div><div class='firma-label'>FIRMA Y NOMBRE SUPERVISOR</div></div>
+          <div class='firma-block'><div class='firma-line'></div><div class='firma-label'>FIRMA Y NOMBRE DE CHOFER</div></div>
+        </div>`;
+        html += `</body></html>`;
+        await Print.printAsync({ html });
+      }, 1500);
     } catch (error) {
       Alert.alert('Error', 'No se pudo exportar el PDF.');
     }
@@ -555,7 +556,7 @@ export default function ResumenSeccion() {
       DatabaseQueries.getAlimentoByFecha(fecha, granjaId).then(setAlimento);
       DatabaseQueries.getExistenciaByFecha(fecha, granjaId).then(setExistencia);
       DatabaseQueries.getEnvaseByFecha(fecha, granjaId).then(setEnvase);
-      Alert.alert('Datos eliminados', 'Todos los datos han sido eliminados.');
+      // No mostrar ninguna alerta ni modal
     } catch (error) {
       Alert.alert('Error', 'No se pudieron eliminar los datos.');
     }
@@ -603,7 +604,7 @@ export default function ResumenSeccion() {
           onPress: async () => {
             try {
               await syncAlimentoData(granjaId, fecha);
-              Alert.alert('Éxito', syncStatusAlimento || 'Sincronización completada');
+              Alert.alert('Éxito', 'Exportación correcta');
             } catch (error) {
               Alert.alert('Error', `Error en sincronización: ${error}`);
             }
@@ -733,6 +734,14 @@ export default function ResumenSeccion() {
       ]
     );
   };
+
+  // Estado para mostrar el modal de exportación
+  const [modalExportacion, setModalExportacion] = useState(false);
+
+  // Eliminar toda referencia a modalEliminado y el Modal correspondiente
+  // Eliminar los modales de edición de nombre y observaciones
+  // Modal personalizado para exportación
+  const [modalEliminado, setModalEliminado] = useState(false);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1014,6 +1023,14 @@ export default function ResumenSeccion() {
       </ScrollView>
       {/* Eliminar el RNScrollView con los botones de encargado, supervisor, chofer y observaciones */}
       {/* Eliminar los modales de edición de nombre y observaciones */}
+      {/* Modal personalizado para exportación */}
+      <Modal isVisible={modalExportacion}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 28, alignItems: 'center', minWidth: 260 }}>
+          <Ionicons name="checkmark-circle-outline" size={48} color="#1db954" style={{ marginBottom: 12 }} />
+          <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 10, color: '#2a3a4b', textAlign: 'center' }}>Exportación correcta</Text>
+        </View>
+      </Modal>
+      {/* Eliminar la sección de botones y modales de nombres y observaciones */}
     </SafeAreaView>
   );
 }

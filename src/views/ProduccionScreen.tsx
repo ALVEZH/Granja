@@ -240,30 +240,39 @@ export default function ProduccionScreen() {
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
       for (const caseta of casetasFiltradas || []) {
+        const row = tabla[caseta.Nombre];
+        // Solo guardar si hay algún dato ingresado en la caseta
+        const tieneDatos = tiposHuevo.some(tipo => {
+          const datosTipo = row?.[tipo] || { cajas: '', restos: '' };
+          return (
+            (datosTipo.cajas !== '' && datosTipo.cajas !== '0') ||
+            (datosTipo.restos !== '' && datosTipo.restos !== '0')
+          );
+        });
+        if (!tieneDatos) continue;
         const data: any = {
-          caseta: caseta.Nombre, // <-- solo el nombre
+          caseta: caseta.Nombre,
           fecha: fechaHoy,
           granja_id: granjaId,
-          blanco_cajas: Number(tabla[caseta.Nombre]?.['BLANCO']?.cajas) || 0,
-          blanco_restos: Number(tabla[caseta.Nombre]?.['BLANCO']?.restos) || 0,
-          roto1_cajas: Number(tabla[caseta.Nombre]?.['ROTO 1']?.cajas) || 0,
-          roto1_restos: Number(tabla[caseta.Nombre]?.['ROTO 1']?.restos) || 0,
-          roto2_cajas: Number(tabla[caseta.Nombre]?.['ROTO 2']?.cajas) || 0,
-          roto2_restos: Number(tabla[caseta.Nombre]?.['ROTO 2']?.restos) || 0,
-          manchado_cajas: Number(tabla[caseta.Nombre]?.['MANCHADO']?.cajas) || 0,
-          manchado_restos: Number(tabla[caseta.Nombre]?.['MANCHADO']?.restos) || 0,
-          fragil1_cajas: Number(tabla[caseta.Nombre]?.['FRAGIL 1']?.cajas) || 0,
-          fragil1_restos: Number(tabla[caseta.Nombre]?.['FRAGIL 1']?.restos) || 0,
-          fragil2_cajas: Number(tabla[caseta.Nombre]?.['FRAGIL 2']?.cajas) || 0,
-          fragil2_restos: Number(tabla[caseta.Nombre]?.['FRAGIL 2']?.restos) || 0,
-          yema_cajas: Number(tabla[caseta.Nombre]?.['YEMA']?.cajas) || 0,
-          yema_restos: Number(tabla[caseta.Nombre]?.['YEMA']?.restos) || 0,
-          b1_cajas: Number(tabla[caseta.Nombre]?.['B1']?.cajas) || 0,
-          b1_restos: Number(tabla[caseta.Nombre]?.['B1']?.restos) || 0,
-          extra240_cajas: Number(tabla[caseta.Nombre]?.['EXTRA 240PZS']?.cajas) || 0,
-          extra240_restos: Number(tabla[caseta.Nombre]?.['EXTRA 240PZS']?.restos) || 0,
+          blanco_cajas: row['BLANCO']?.cajas === '' ? null : Number(row['BLANCO']?.cajas),
+          blanco_restos: row['BLANCO']?.restos === '' ? null : Number(row['BLANCO']?.restos),
+          roto1_cajas: row['ROTO 1']?.cajas === '' ? null : Number(row['ROTO 1']?.cajas),
+          roto1_restos: row['ROTO 1']?.restos === '' ? null : Number(row['ROTO 1']?.restos),
+          roto2_cajas: row['ROTO 2']?.cajas === '' ? null : Number(row['ROTO 2']?.cajas),
+          roto2_restos: row['ROTO 2']?.restos === '' ? null : Number(row['ROTO 2']?.restos),
+          manchado_cajas: row['MANCHADO']?.cajas === '' ? null : Number(row['MANCHADO']?.cajas),
+          manchado_restos: row['MANCHADO']?.restos === '' ? null : Number(row['MANCHADO']?.restos),
+          fragil1_cajas: row['FRAGIL 1']?.cajas === '' ? null : Number(row['FRAGIL 1']?.cajas),
+          fragil1_restos: row['FRAGIL 1']?.restos === '' ? null : Number(row['FRAGIL 1']?.restos),
+          fragil2_cajas: row['FRAGIL 2']?.cajas === '' ? null : Number(row['FRAGIL 2']?.cajas),
+          fragil2_restos: row['FRAGIL 2']?.restos === '' ? null : Number(row['FRAGIL 2']?.restos),
+          yema_cajas: row['YEMA']?.cajas === '' ? null : Number(row['YEMA']?.cajas),
+          yema_restos: row['YEMA']?.restos === '' ? null : Number(row['YEMA']?.restos),
+          b1_cajas: row['B1']?.cajas === '' ? null : Number(row['B1']?.cajas),
+          b1_restos: row['B1']?.restos === '' ? null : Number(row['B1']?.restos),
+          extra240_cajas: row['EXTRA 240PZS']?.cajas === '' ? null : Number(row['EXTRA 240PZS']?.cajas),
+          extra240_restos: row['EXTRA 240PZS']?.restos === '' ? null : Number(row['EXTRA 240PZS']?.restos),
         };
-        console.log('Guardando producción:', data);
         await DatabaseQueries.insertProduccion(data);
       }
       return true;
@@ -321,7 +330,7 @@ export default function ProduccionScreen() {
   // (No se hace nada, ya que el estado se mantiene mientras la app no se recargue o cierre)
   // Si quieres persistencia incluso al cerrar la app, se puede agregar AsyncStorage.
 
-  // Solo poner en verde las casetas completas (ya está en el render)
+  // Solo poner en verde las casetas completas
 
   // Cambiar la flecha de regresar para mostrar alerta si hay datos sin guardar
   const handleBack = () => {
@@ -417,7 +426,7 @@ export default function ProduccionScreen() {
                         </View>
                       );
                     })}
-                  </View>
+                    </View>
                   </ScrollView>
                 )}
               </View>
@@ -499,14 +508,14 @@ const styles = StyleSheet.create({
   inputPair: {
     flexDirection: 'column',
     alignItems: 'center',
-    marginRight: 20, // Espacio suficiente entre los inputs
+    marginRight: 20, 
   },
   inputLabel: { fontSize: 11, color: '#666', marginBottom: 2 },
   inputCell: {
     borderWidth: 1.5,
     borderColor: '#b0b8c1',
     borderRadius: 8,
-    width: 90, // suficiente para 6 dígitos
+    width: 90, 
     height: 40,
     margin: 4,
     paddingHorizontal: 12,

@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useLogin } from '../hooks/useLogin';
+import Modal from 'react-native-modal';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -27,22 +28,35 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [secureText, setSecureText] = useState(true);
 
+  // Estado para mostrar el modal de alerta personalizada
+  const [modalAlerta, setModalAlerta] = useState({ visible: false, tipo: 'info', mensaje: '' });
+
   const toggleSecureText = () => setSecureText(!secureText);
+
+  const mostrarAlerta = (tipo: 'exito' | 'error', mensaje: string, callback?: () => void) => {
+    setModalAlerta({ visible: true, tipo, mensaje });
+    if (callback) {
+      setTimeout(() => {
+        setModalAlerta({ visible: false, tipo: 'info', mensaje: '' });
+        callback();
+      }, 1500);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Campos requeridos', 'Completa todos los campos para continuar.');
+      mostrarAlerta('error', 'Completa todos los campos para continuar.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('Correo inválido', 'El formato del correo electrónico es incorrecto.');
+      mostrarAlerta('error', 'El formato del correo electrónico es incorrecto.');
       return;
     }
 
     if (password.length < 3) {
-      Alert.alert('Contraseña inválida', 'La contraseña debe tener al menos 6 caracteres.');
+      mostrarAlerta('error', 'La contraseña debe tener al menos 6 caracteres.');
       return;
     }
 
@@ -50,19 +64,36 @@ export default function LoginScreen() {
       const usuario = await login(email, password);
 
       if (usuario) {
-        Alert.alert("Éxito", "Inicio de sesión exitoso.");
-        navigation.replace('SeleccionSeccion');
+        mostrarAlerta('exito', 'Inicio de sesión exitoso.', () => navigation.replace('SeleccionSeccion'));
       } else {
-        Alert.alert("Error", "Correo o contraseña incorrectos.");
+        mostrarAlerta('error', 'Correo o contraseña incorrectos.');
       }
     } catch (error) {
-      Alert.alert('Error del servidor', 'No se pudo validar el usuario. Intenta más tarde.');
+      mostrarAlerta('error', 'No se pudo validar el usuario. Intenta más tarde.');
     }
   };
 
   
   return (
     <SafeAreaView style={styles.container}>
+      {/* Modal personalizado para alertas de login */}
+      <Modal isVisible={modalAlerta.visible} onBackdropPress={() => setModalAlerta({ visible: false, tipo: 'info', mensaje: '' })}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 28, alignItems: 'center', minWidth: 260 }}>
+          {modalAlerta.tipo === 'exito' ? (
+            <Ionicons name="checkmark-circle-outline" size={48} color="#1db954" style={{ marginBottom: 12 }} />
+          ) : (
+            <Ionicons name="close-circle-outline" size={48} color="#e53935" style={{ marginBottom: 12 }} />
+          )}
+          <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 10, color: '#2a3a4b', textAlign: 'center' }}>{modalAlerta.tipo === 'exito' ? '¡Éxito!' : 'Error'}</Text>
+          <Text style={{ color: '#666', fontSize: 15, marginBottom: 8, textAlign: 'center' }}>{modalAlerta.mensaje}</Text>
+          <TouchableOpacity
+            style={{ backgroundColor: modalAlerta.tipo === 'exito' ? '#1db954' : '#e53935', borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 10, minWidth: 120 }}
+            onPress={() => setModalAlerta({ visible: false, tipo: 'info', mensaje: '' })}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboard}

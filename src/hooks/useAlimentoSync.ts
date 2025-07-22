@@ -22,7 +22,6 @@ export const useAlimentoSync = () => {
       
       if (datosLocales.length === 0) {
         setSyncStatus('❌ No hay datos locales para sincronizar');
-        Alert.alert('Sincronización de Alimentos', 'No hay datos locales para sincronizar.');
         setIsSyncing(false);
         return;
       }
