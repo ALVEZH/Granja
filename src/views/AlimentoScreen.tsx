@@ -46,44 +46,20 @@ export default function AlimentoScreen() {
   // Cargar datos existentes cuando cambian las casetas o la fecha
   useEffect(() => {
     if (!casetasFiltradas || !granjaId) return;
-    
-    const cargarDatosExistentes = async () => {
-      try {
-        const datosExistentes = await DatabaseQueries.getAlimentoByFecha(fechaHoy, granjaId);
-        
-        setTabla(prev => {
-          const obj: Record<string, CasetaAlimento> = {};
-          
-          // Inicializar todas las casetas con datos vacíos
-          casetasFiltradas.forEach(caseta => {
-            obj[caseta.Nombre] = {
-              existenciaInicial: '',
-              entrada: '',
-              consumo: '',
-              tipo: ''
-            };
-          });
-          
-          // Cargar datos existentes
-          datosExistentes.forEach((registro: any) => {
-            if (obj[registro.caseta]) {
-              obj[registro.caseta] = {
-                existenciaInicial: registro.existencia_inicial?.toString() || '',
-                entrada: registro.entrada?.toString() || '',
-                consumo: registro.consumo?.toString() || '',
-                tipo: registro.tipo || ''
-              };
-            }
-          });
-          
-          return obj;
-        });
-      } catch (error) {
-        console.error('Error cargando datos existentes:', error);
-      }
-    };
-    
-    cargarDatosExistentes();
+    setGuardado(false); // Reiniciar el estado de guardado al entrar
+    // SIEMPRE inicializar los inputs vacíos
+    setTabla(() => {
+      const obj: Record<string, CasetaAlimento> = {};
+      casetasFiltradas.forEach(caseta => {
+        obj[caseta.Nombre] = {
+          existenciaInicial: '',
+          entrada: '',
+          consumo: '',
+          tipo: ''
+        };
+      });
+      return obj;
+    });
   }, [casetasFiltradas.length, granjaId, fechaHoy]);
 
   // Calcular totales
@@ -193,21 +169,24 @@ export default function AlimentoScreen() {
       Alert.alert('Error', 'No se ha seleccionado una sección.');
       return;
     }
-    await guardarAlimentos(false);
-    // Limpiar la tabla local después de guardar (pero NO borrar los datos locales)
-    setTabla(() => {
-      const obj: Record<string, CasetaAlimento> = {};
-      casetasFiltradas.forEach(caseta => {
-        obj[caseta.Nombre] = {
-          existenciaInicial: '',
-          entrada: '',
-          consumo: '',
-          tipo: ''
-        };
+    const exito = await guardarAlimentos(false);
+    if (exito) {
+      setTabla(() => {
+        const obj: Record<string, CasetaAlimento> = {};
+        casetasFiltradas.forEach(caseta => {
+          obj[caseta.Nombre] = {
+            existenciaInicial: '',
+            entrada: '',
+            consumo: '',
+            tipo: ''
+          };
+        });
+        return obj;
       });
-      return obj;
-    });
-    setGuardado(true);
+      setGuardado(true);
+      Alert.alert('Éxito', 'Datos de alimentos guardados correctamente.');
+    }
+    // NO navegar aquí
   };
 
   const handleContinuar = () => {
@@ -226,7 +205,7 @@ export default function AlimentoScreen() {
 
   // Función auxiliar para guardar los datos
   const guardarAlimentos = async (forzar: boolean) => {
-    if (guardando) return;
+    if (guardando) return false;
     setGuardando(true);
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
@@ -247,13 +226,28 @@ export default function AlimentoScreen() {
           await DatabaseQueries.insertAlimento(data);
         }
       }
-      setGuardado(true);
-      Alert.alert('Éxito', 'Datos de alimentos guardados correctamente.');
-      navigation.replace('Menu');
+      return true;
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar los datos.');
+      return false;
     } finally {
       setGuardando(false);
+    }
+  };
+
+  // Cambiar la flecha de regresar para mostrar alerta si hay datos sin guardar
+  const handleBack = () => {
+    if (hayDatosIngresados()) {
+      Alert.alert(
+        'Atención',
+        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => navigation.replace('Menu') }
+        ]
+      );
+    } else {
+      navigation.replace('Menu');
     }
   };
 
@@ -263,7 +257,7 @@ export default function AlimentoScreen() {
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.replace('Menu')}
+          onPress={handleBack}
         >
           <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>

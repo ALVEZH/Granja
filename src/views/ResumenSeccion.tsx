@@ -293,16 +293,15 @@ export default function ResumenSeccion() {
   // Para Alimento y Existencia, usar casetasValidas y filtrar los datos igual que en Producción
   const totalesAlimento = useMemo(() => {
     let existenciaInicial = 0, entrada = 0, consumo = 0;
-    casetasValidas.forEach(caseta => {
-      const row = alimento.find((r: any) => r.caseta === caseta);
-      if (row) {
+    (alimento ?? []).forEach((row: any) => {
+      if (row && casetasValidas.includes(row.caseta)) {
         existenciaInicial += Number(row.existencia_inicial || 0);
         entrada += Number(row.entrada || 0);
         consumo += Number(row.consumo || 0);
       }
     });
     return { existenciaInicial, entrada, consumo };
-  }, [alimento, casetasValidas]);
+  }, [alimento, casetasValidas]) || { existenciaInicial: 0, entrada: 0, consumo: 0 };
 
   const totalesExistencia = useMemo(() => {
     let inicial = 0, entrada = 0, mortalidad = 0, salida = 0, final = 0;
@@ -333,6 +332,93 @@ export default function ResumenSeccion() {
   // Exportar a PDF
   const exportarPDF = async () => {
     try {
+      // Sincronizar todo antes de exportar
+      if (!granjaId) {
+        Alert.alert('Error', 'No hay sección seleccionada');
+        return;
+      }
+      // 1. Sincronizar Producción
+      try {
+        await syncProduccionData(granjaId, fecha);
+      } catch (error) {
+        Alert.alert('Error', 'Error al sincronizar Producción. No se exportó el PDF.');
+        return;
+      }
+      // 2. Sincronizar Alimentos
+      try {
+        await syncAlimentoData(granjaId, fecha);
+      } catch (error) {
+        Alert.alert('Error', 'Error al sincronizar Alimentos. No se exportó el PDF.');
+        return;
+      }
+      // 3. Sincronizar Existencia
+      try {
+        let exitosos = 0, fallidos = 0;
+        for (const row of existencia) {
+          if (
+            row.caseta &&
+            (row.inicial > 0 || row.entrada > 0 || row.mortalidad > 0 || row.salida > 0 || row.final > 0)
+          ) {
+            const casetaObj = casetas.find(c => c.Nombre === row.caseta);
+            const casetaId = casetaObj ? casetaObj.CasetaID : null;
+            if (!casetaId) {
+              fallidos++;
+              continue;
+            }
+            const existenciaData = {
+              GranjaID: granjaId,
+              CasetaID: casetaId,
+              Fecha: row.fecha,
+              ExistenciaInicial: Number(row.inicial) || 0,
+              Entrada: Number(row.entrada) || 0,
+              Mortalidad: Number(row.mortalidad) || 0,
+              Salida: Number(row.salida) || 0,
+              Edad: Number(row.edad) || 0,
+              ExistenciaFinal: Number(row.final) || 0,
+              CreadoPor: 'usuarioApp'
+            };
+            const result = await syncExistencia(existenciaData);
+            if (result.ok) exitosos++;
+            else fallidos++;
+          }
+        }
+        if (fallidos > 0) {
+          Alert.alert('Error', `Error al sincronizar Existencia (${fallidos} fallidos). No se exportó el PDF.`);
+          return;
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Error al sincronizar Existencia. No se exportó el PDF.');
+        return;
+      }
+      // 4. Sincronizar Envase
+      try {
+        let exitosos = 0, fallidos = 0;
+        for (const row of envase) {
+          if (row.tipo) {
+            const envaseData = {
+              GranjaID: granjaId,
+              Fecha: row.fecha,
+              TipoEnvase: row.tipo,
+              ExistenciaInicial: Number(row.inicial) || 0,
+              Recibido: Number(row.recibido) || 0,
+              Consumo: Number(row.consumo) || 0,
+              ExistenciaFinal: Number(row.final) || 0,
+              CreadoPor: 'usuarioApp'
+            };
+            const result = await syncEnvase(envaseData);
+            if (result.ok) exitosos++;
+            else fallidos++;
+          }
+        }
+        if (fallidos > 0) {
+          Alert.alert('Error', `Error al sincronizar Envase (${fallidos} fallidos). No se exportó el PDF.`);
+          return;
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Error al sincronizar Envase. No se exportó el PDF.');
+        return;
+      }
+      // Si todo fue exitoso, exportar PDF
       let html = `<html><head><style>
         @page { size: A4 landscape; margin: 18px; }
         body { font-family: Arial, sans-serif; font-size: 11px; }
@@ -391,7 +477,7 @@ export default function ResumenSeccion() {
         const row = alimento.find((r: any) => r.caseta === caseta) || {};
         html += `<tr><td>${caseta}</td><td>${row.existencia_inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.consumo || ''}</td><td>${row.tipo || ''}</td></tr>`;
       });
-      html += `<tr><td><b>TOTAL</b></td><td><b>${totalesAlimento.existenciaInicial}</b></td><td><b>${totalesAlimento.entrada}</b></td><td><b>${totalesAlimento.consumo}</b></td><td></td></tr></table></div>`;
+      html += `<tr><td><b>TOTAL</b></td><td><b>${totalesAlimento?.existenciaInicial ?? 0}</b></td><td><b>${totalesAlimento?.entrada ?? 0}</b></td><td><b>${totalesAlimento?.consumo ?? 0}</b></td><td></td></tr></table></div>`;
       // EXISTENCIA
       html += `<div style='flex:1;'><div class='tabla-bloque'>EXISTENCIA</div>`;
       html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>MORTALIDAD</th><th>SALIDA</th><th>EDAD</th><th>EXIST. FINAL</th></tr>`;
@@ -421,6 +507,43 @@ export default function ResumenSeccion() {
       await Print.printAsync({ html });
     } catch (error) {
       Alert.alert('Error', 'No se pudo exportar el PDF.');
+    }
+  };
+
+  // Estado para mostrar el modal de eliminación
+  const [modalEliminarVisible, setModalEliminarVisible] = useState(false);
+
+  // Función para eliminar datos de una tabla específica
+  const eliminarDatosTabla = async (tabla: 'produccion' | 'alimento' | 'existencia' | 'envase' | 'todas') => {
+    try {
+      if (tabla === 'todas') {
+        await DatabaseQueries.clearAllData();
+        DatabaseQueries.getProduccionByFecha(fecha, granjaId).then(setProduccion);
+        DatabaseQueries.getAlimentoByFecha(fecha, granjaId).then(setAlimento);
+        DatabaseQueries.getExistenciaByFecha(fecha, granjaId).then(setExistencia);
+        DatabaseQueries.getEnvaseByFecha(fecha, granjaId).then(setEnvase);
+        Alert.alert('Datos eliminados', 'Todos los datos han sido eliminados.');
+      } else if (tabla === 'produccion') {
+        await DatabaseQueries.deleteProduccionByFecha(fecha, granjaId);
+        DatabaseQueries.getProduccionByFecha(fecha, granjaId).then(setProduccion);
+        Alert.alert('Datos eliminados', 'Datos de Producción eliminados.');
+      } else if (tabla === 'alimento') {
+        await DatabaseQueries.deleteAlimentoByFecha(fecha, granjaId);
+        DatabaseQueries.getAlimentoByFecha(fecha, granjaId).then(setAlimento);
+        Alert.alert('Datos eliminados', 'Datos de Alimento eliminados.');
+      } else if (tabla === 'existencia') {
+        await DatabaseQueries.deleteExistenciaByFecha(fecha, granjaId);
+        DatabaseQueries.getExistenciaByFecha(fecha, granjaId).then(setExistencia);
+        Alert.alert('Datos eliminados', 'Datos de Existencia eliminados.');
+      } else if (tabla === 'envase') {
+        await DatabaseQueries.deleteEnvaseByFecha(fecha, granjaId);
+        DatabaseQueries.getEnvaseByFecha(fecha, granjaId).then(setEnvase);
+        Alert.alert('Datos eliminados', 'Datos de Envase eliminados.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'No se pudieron eliminar los datos.');
+    } finally {
+      setModalEliminarVisible(false);
     }
   };
 
@@ -722,9 +845,9 @@ export default function ResumenSeccion() {
             <View style={[styles.dataRow, { flexDirection: 'row' }]}> 
               {[
                 <View key="total" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>TOTAL</Text></View>,
-                <View key="existencia_inicial" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesAlimento.existenciaInicial}</Text></View>,
-                <View key="entrada" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesAlimento.entrada}</Text></View>,
-                <View key="consumo" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesAlimento.consumo}</Text></View>,
+                <View key="existencia_inicial" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{(totalesAlimento && typeof totalesAlimento.existenciaInicial === 'number') ? totalesAlimento.existenciaInicial : 0}</Text></View>,
+                <View key="entrada" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{(totalesAlimento && typeof totalesAlimento.entrada === 'number') ? totalesAlimento.entrada : 0}</Text></View>,
+                <View key="consumo" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{(totalesAlimento && typeof totalesAlimento.consumo === 'number') ? totalesAlimento.consumo : 0}</Text></View>,
                 <View key="tipo" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}></Text></View>,
               ].map((cell, i, arr) =>
                 React.cloneElement(cell, {
@@ -845,52 +968,36 @@ export default function ResumenSeccion() {
           <Image source={require('../../assets/Iconos/PDF.png')} style={styles.resumenIcon} resizeMode="contain" />
           <Text style={styles.btnExportarText}>Exportar a PDF</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.btnExportar, { backgroundColor: '#d9534f', marginTop: 0 }]} onPress={handleEliminarDatos}>
+        <TouchableOpacity
+          style={[styles.btnExportar, { backgroundColor: '#dc3545', marginTop: 0 }]}
+          onPress={() => setModalEliminarVisible(true)}
+        >
           <Ionicons name="trash" size={24} color="#fff" style={{ marginRight: 10 }} />
           <Text style={styles.btnExportarText}>Eliminar datos</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.btnExportar, { backgroundColor: '#28a745', marginTop: 0 }]} 
-          onPress={handleSincronizarProduccion}
-          disabled={isSyncing}
-        >
-          <Ionicons name="cloud-upload" size={24} color="#fff" style={{ marginRight: 10 }} />
-          <Text style={styles.btnExportarText}>
-            {isSyncing ? 'Sincronizando...' : 'Sincronizar Producción'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.btnExportar, { backgroundColor: '#17a2b8', marginTop: 0 }]} 
-          onPress={handleSincronizarAlimento}
-          disabled={isSyncingAlimento}
-        >
-          <Ionicons name="cloud-upload" size={24} color="#fff" style={{ marginRight: 10 }} />
-          <Text style={styles.btnExportarText}>
-            {isSyncingAlimento ? 'Sincronizando...' : 'Sincronizar Alimentos'}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.btnExportar, { backgroundColor: '#ffc107', marginTop: 0 }]} 
-          onPress={handleSincronizarExistencia}
-        >
-          <Ionicons name="cloud-upload" size={24} color="#fff" style={{ marginRight: 10 }} />
-          <Text style={styles.btnExportarText}>
-            Sincronizar Existencias
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.btnExportar, { backgroundColor: '#6f42c1', marginTop: 0 }]} 
-          onPress={handleSincronizarEnvase}
-        >
-          <Ionicons name="cloud-upload" size={24} color="#fff" style={{ marginRight: 10 }} />
-          <Text style={styles.btnExportarText}>
-            Sincronizar Envases
-          </Text>
-        </TouchableOpacity>
+        <Modal isVisible={modalEliminarVisible} onBackdropPress={() => setModalEliminarVisible(false)}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 24 }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 16, textAlign: 'center' }}>¿Qué datos deseas eliminar?</Text>
+            <TouchableOpacity style={{ marginVertical: 8 }} onPress={() => eliminarDatosTabla('produccion')}>
+              <Text style={{ fontSize: 16, color: '#dc3545', textAlign: 'center' }}>Producción</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ marginVertical: 8 }} onPress={() => eliminarDatosTabla('alimento')}>
+              <Text style={{ fontSize: 16, color: '#dc3545', textAlign: 'center' }}>Alimento</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ marginVertical: 8 }} onPress={() => eliminarDatosTabla('existencia')}>
+              <Text style={{ fontSize: 16, color: '#dc3545', textAlign: 'center' }}>Existencia</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ marginVertical: 8 }} onPress={() => eliminarDatosTabla('envase')}>
+              <Text style={{ fontSize: 16, color: '#dc3545', textAlign: 'center' }}>Envase</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ marginVertical: 8 }} onPress={() => eliminarDatosTabla('todas')}>
+              <Text style={{ fontSize: 16, color: '#fff', backgroundColor: '#dc3545', borderRadius: 6, padding: 8, textAlign: 'center' }}>Todas</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ marginTop: 16 }} onPress={() => setModalEliminarVisible(false)}>
+              <Text style={{ fontSize: 15, color: '#007bff', textAlign: 'center' }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
         
         {syncStatus ? (
           <View style={{ padding: 10, margin: 16, backgroundColor: '#f8f9fa', borderRadius: 8, borderWidth: 1, borderColor: '#dee2e6' }}>

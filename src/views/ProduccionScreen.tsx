@@ -54,71 +54,17 @@ export default function ProduccionScreen() {
   useEffect(() => {
     if (!casetasFiltradas || !granjaId) return;
     setGuardado(false); // Reiniciar el estado de guardado al entrar
-    const cargarDatosExistentes = async () => {
-      try {
-        const datosExistentes = await DatabaseQueries.getProduccionByFecha(fechaHoy, granjaId);
-        
-        setTabla(prev => {
-          const obj: Record<string, CasetaProduccion> = {};
-          
-          // Inicializar todas las casetas con datos vacíos
-          casetasFiltradas.forEach(caseta => {
-            obj[caseta.Nombre] = {};
-            tiposHuevo.forEach(tipo => {
-              obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
-            });
-          });
-          
-          // Cargar datos existentes
-          datosExistentes.forEach(registro => {
-            if (obj[registro.caseta]) {
-              obj[registro.caseta]['BLANCO'] = { 
-                cajas: registro.blanco_cajas?.toString() || '', 
-                restos: registro.blanco_restos?.toString() || '' 
-              };
-              obj[registro.caseta]['ROTO 1'] = { 
-                cajas: registro.roto1_cajas?.toString() || '', 
-                restos: registro.roto1_restos?.toString() || '' 
-              };
-              obj[registro.caseta]['ROTO 2'] = { 
-                cajas: registro.roto2_cajas?.toString() || '', 
-                restos: registro.roto2_restos?.toString() || '' 
-              };
-              obj[registro.caseta]['MANCHADO'] = { 
-                cajas: registro.manchado_cajas?.toString() || '', 
-                restos: registro.manchado_restos?.toString() || '' 
-              };
-              obj[registro.caseta]['FRAGIL 1'] = { 
-                cajas: registro.fragil1_cajas?.toString() || '', 
-                restos: registro.fragil1_restos?.toString() || '' 
-              };
-              obj[registro.caseta]['FRAGIL 2'] = { 
-                cajas: registro.fragil2_cajas?.toString() || '', 
-                restos: registro.fragil2_restos?.toString() || '' 
-              };
-              obj[registro.caseta]['YEMA'] = { 
-                cajas: registro.yema_cajas?.toString() || '', 
-                restos: registro.yema_restos?.toString() || '' 
-              };
-              obj[registro.caseta]['B1'] = { 
-                cajas: registro.b1_cajas?.toString() || '', 
-                restos: registro.b1_restos?.toString() || '' 
-              };
-              obj[registro.caseta]['EXTRA 240PZS'] = { 
-                cajas: registro.extra240_cajas?.toString() || '', 
-                restos: registro.extra240_restos?.toString() || '' 
-              };
-            }
-          });
-          
-          return obj;
+    // SIEMPRE inicializar los inputs vacíos
+    setTabla(() => {
+      const obj: Record<string, CasetaProduccion> = {};
+      casetasFiltradas.forEach(caseta => {
+        obj[caseta.Nombre] = {};
+        tiposHuevo.forEach(tipo => {
+          obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
         });
-      } catch (error) {
-        console.error('Error cargando datos existentes:', error);
-      }
-    };
-    
-    cargarDatosExistentes();
+      });
+      return obj;
+    });
   }, [casetasFiltradas.length, granjaId, fechaHoy]);
 
   // Calcular totales por tipo
@@ -252,19 +198,22 @@ export default function ProduccionScreen() {
       Alert.alert('Error', 'No se ha seleccionado una sección.');
       return;
     }
-    await guardarProduccion(false);
-    // Limpiar la tabla local después de guardar
-    setTabla(() => {
-      const obj: Record<string, CasetaProduccion> = {};
-      casetasFiltradas.forEach(caseta => {
-        obj[caseta.Nombre] = {};
-        tiposHuevo.forEach(tipo => {
-          obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
+    const exito = await guardarProduccion(false);
+    if (exito) {
+      setTabla(() => {
+        const obj: Record<string, CasetaProduccion> = {};
+        casetasFiltradas.forEach(caseta => {
+          obj[caseta.Nombre] = {};
+          tiposHuevo.forEach(tipo => {
+            obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
+          });
         });
+        return obj;
       });
-      return obj;
-    });
-    setGuardado(true);
+      setGuardado(true);
+      Alert.alert('Éxito', 'Datos de producción guardados correctamente.');
+    }
+    // NO navegar aquí
   };
 
   // Botón para continuar (redirigir al menú solo si no hay datos sin guardar)
@@ -286,7 +235,7 @@ export default function ProduccionScreen() {
   // Solo permite guardar una vez por click
   const [guardando, setGuardando] = useState(false);
   const guardarProduccion = async (forzar: boolean) => {
-    if (guardando) return;
+    if (guardando) return false;
     setGuardando(true);
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
@@ -317,26 +266,10 @@ export default function ProduccionScreen() {
         console.log('Guardando producción:', data);
         await DatabaseQueries.insertProduccion(data);
       }
-      setGuardado(true);
-      Alert.alert('Éxito', 'Datos de producción guardados correctamente.');
-      // Limpiar la tabla local después de guardar (pero NO borrar los datos locales)
-      setTabla(() => {
-        const obj: Record<string, CasetaProduccion> = {};
-        casetasFiltradas.forEach(caseta => {
-          obj[caseta.Nombre] = {};
-          tiposHuevo.forEach(tipo => {
-            obj[caseta.Nombre][tipo] = { cajas: '', restos: '' };
-          });
-        });
-        return obj;
-      });
-      // Desactivar el listener antes de navegar
-      if (navigation.removeListener && typeof onBeforeRemove === 'function') {
-        navigation.removeListener('beforeRemove', onBeforeRemove);
-      }
-      navigation.replace('Menu');
+      return true;
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar los datos.');
+      return false;
     } finally {
       setGuardando(false);
     }
@@ -390,12 +323,28 @@ export default function ProduccionScreen() {
 
   // Solo poner en verde las casetas completas (ya está en el render)
 
+  // Cambiar la flecha de regresar para mostrar alerta si hay datos sin guardar
+  const handleBack = () => {
+    if (hayDatosIngresados()) {
+      Alert.alert(
+        'Atención',
+        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => navigation.replace('Menu') }
+        ]
+      );
+    } else {
+      navigation.replace('Menu');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.replace('Menu')}
+          onPress={handleBack}
         >
           <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>

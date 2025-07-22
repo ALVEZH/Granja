@@ -77,43 +77,41 @@ export default function ExistenciaScreen() {
   // Calcular totales y existencia final
   const totales = useMemo(() => {
     let existenciaInicial = 0, entrada = 0, mortalidad = 0, salida = 0, existenciaFinal = 0;
-    
-    casetas.forEach(caseta => {
-      const inicial = Number(tabla[caseta.Nombre].existenciaInicial) || 0;
-      const ent = Number(tabla[caseta.Nombre].entrada) || 0;
-      const mort = Number(tabla[caseta.Nombre].mortalidad) || 0;
-      const sal = Number(tabla[caseta.Nombre].salida) || 0;
+    casetasFiltradas.forEach(caseta => {
+      const nombre = typeof caseta === 'string' ? caseta : caseta.Nombre;
+      const datos = tabla[nombre] || { existenciaInicial: '', entrada: '', mortalidad: '', salida: '', edad: '', existenciaFinal: '0' };
+      const inicial = Number(datos.existenciaInicial) || 0;
+      const ent = Number(datos.entrada) || 0;
+      const mort = Number(datos.mortalidad) || 0;
+      const sal = Number(datos.salida) || 0;
       const final = inicial + ent - mort - sal;
-      
       existenciaInicial += inicial;
       entrada += ent;
       mortalidad += mort;
       salida += sal;
       existenciaFinal += final;
     });
-    
     return { existenciaInicial, entrada, mortalidad, salida, existenciaFinal };
-  }, [tabla]);
+  }, [tabla, casetasFiltradas]);
 
   // Manejar cambios en la tabla
   const handleChange = (caseta: string, campo: string, valor: string) => {
     setTabla((prev: any) => {
-      const newTabla = {
-        ...prev,
-        [caseta]: {
-          ...prev[caseta],
-          [campo]: campo === 'edad' ? valor.replace(/[^0-9]/g, '') : valor.replace(/[^0-9]/g, '')
-        }
+      const prevDatos = prev[caseta] || { existenciaInicial: '', entrada: '', mortalidad: '', salida: '', edad: '', existenciaFinal: '0' };
+      const newDatos = {
+        ...prevDatos,
+        [campo]: campo === 'edad' ? valor.replace(/[^0-9]/g, '') : valor.replace(/[^0-9]/g, '')
       };
-
       // Calcular existencia final para esta caseta
-      const inicial = Number(newTabla[caseta].existenciaInicial) || 0;
-      const entrada = Number(newTabla[caseta].entrada) || 0;
-      const mortalidad = Number(newTabla[caseta].mortalidad) || 0;
-      const salida = Number(newTabla[caseta].salida) || 0;
-      newTabla[caseta].existenciaFinal = String(inicial + entrada - mortalidad - salida);
-
-      return newTabla;
+      const inicial = Number(newDatos.existenciaInicial) || 0;
+      const entrada = Number(newDatos.entrada) || 0;
+      const mortalidad = Number(newDatos.mortalidad) || 0;
+      const salida = Number(newDatos.salida) || 0;
+      newDatos.existenciaFinal = String(inicial + entrada - mortalidad - salida);
+      return {
+        ...prev,
+        [caseta]: newDatos
+      };
     });
   };
 
@@ -125,7 +123,8 @@ export default function ExistenciaScreen() {
   // Función para saber si hay algún dato ingresado en cualquier input
   const hayDatosIngresados = () => {
     return casetasFiltradas.some(caseta => {
-      const datos = tabla[caseta.Nombre] || { existenciaInicial: '', entrada: '', mortalidad: '', salida: '', edad: '', existenciaFinal: '0' };
+      const nombre = typeof caseta === 'string' ? caseta : caseta.Nombre;
+      const datos = tabla[nombre] || { existenciaInicial: '', entrada: '', mortalidad: '', salida: '', edad: '', existenciaFinal: '0' };
       return (
         (datos.existenciaInicial !== '' && datos.existenciaInicial !== '0') ||
         (datos.entrada !== '' && datos.entrada !== '0') ||
@@ -139,6 +138,10 @@ export default function ExistenciaScreen() {
   useFocusEffect(
     React.useCallback(() => {
       const onBeforeRemove = (e: any) => {
+        if (guardado) {
+          // Permitir salir sin alerta si los datos acaban de guardarse
+          return;
+        }
         if (hayDatosIngresados()) {
           e.preventDefault();
           Alert.alert(
@@ -153,22 +156,37 @@ export default function ExistenciaScreen() {
       };
       navigation.addListener('beforeRemove', onBeforeRemove);
       return () => navigation.removeListener('beforeRemove', onBeforeRemove);
-    }, [navigation, tabla, casetasFiltradas])
+    }, [navigation, tabla, casetasFiltradas, guardado])
   );
 
   // Función para verificar si una caseta está completa
   const isCasetaCompleta = (caseta: string | { Nombre: string }) => {
     const nombre = typeof caseta === 'string' ? caseta : caseta.Nombre;
-    const datos = tabla[nombre] || {};
+    const datos = tabla[nombre] || { existenciaInicial: '', entrada: '', mortalidad: '', salida: '', edad: '', existenciaFinal: '0' };
     // Una caseta está "completa" si al menos un campo tiene datos distintos de vacío o cero
     return (
       (datos.existenciaInicial !== '' && datos.existenciaInicial !== '0') ||
       (datos.entrada !== '' && datos.entrada !== '0') ||
       (datos.mortalidad !== '' && datos.mortalidad !== '0') ||
       (datos.salida !== '' && datos.salida !== '0') ||
-      (datos.edad !== '' && datos.edad !== '0') ||
-      (datos.existenciaFinal !== '' && datos.existenciaFinal !== '0')
+      (datos.edad !== '' && datos.edad !== '0')
     );
+  };
+
+  // Cambiar la flecha de regresar para mostrar alerta si hay datos sin guardar
+  const handleBack = () => {
+    if (hayDatosIngresados()) {
+      Alert.alert(
+        'Atención',
+        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => navigation.replace('Menu') }
+        ]
+      );
+    } else {
+      navigation.replace('Menu');
+    }
   };
 
   // Guardar datos en la base de datos
@@ -177,23 +195,13 @@ export default function ExistenciaScreen() {
       Alert.alert('Error', 'No se ha seleccionado una sección.');
       return;
     }
-    await guardarExistencia(false);
-    // Limpiar la tabla local después de guardar (pero NO borrar los datos locales)
-    setTabla(() => {
-      const obj: Record<string, CasetaExistencia> = {};
-      casetasFiltradas.forEach(caseta => {
-        obj[caseta.Nombre] = {
-          existenciaInicial: '',
-          entrada: '',
-          mortalidad: '',
-          salida: '',
-          edad: '',
-          existenciaFinal: '0',
-        };
-      });
-      return obj;
-    });
-    setGuardado(true);
+    const exito = await guardarExistencia(false);
+    if (exito) {
+      setTabla({});
+      setGuardado(true);
+      Alert.alert('Éxito', 'Datos de existencia guardados correctamente.');
+    }
+    // NO navegar aquí
   };
 
   const handleContinuar = () => {
@@ -212,39 +220,38 @@ export default function ExistenciaScreen() {
 
   // Función auxiliar para guardar los datos
   const guardarExistencia = async (forzar: boolean) => {
-    if (guardando) return;
+    if (guardando) return false;
     setGuardando(true);
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
-      for (const caseta of casetas) {
-        // Solo guarda si hay algún campo lleno
+      for (const caseta of casetasFiltradas) {
+        const nombre = typeof caseta === 'string' ? caseta : caseta.Nombre;
         if (
-          tabla[caseta.Nombre].existenciaInicial ||
-          tabla[caseta.Nombre].entrada ||
-          tabla[caseta.Nombre].mortalidad ||
-          tabla[caseta.Nombre].salida ||
-          tabla[caseta.Nombre].edad ||
-          tabla[caseta.Nombre].existenciaFinal
+          tabla[nombre].existenciaInicial ||
+          tabla[nombre].entrada ||
+          tabla[nombre].mortalidad ||
+          tabla[nombre].salida ||
+          tabla[nombre].edad ||
+          tabla[nombre].existenciaFinal
         ) {
           const data: any = {
-            caseta: caseta.Nombre,
+            caseta: nombre,
             fecha: fechaHoy,
             granja_id: granjaId,
-            inicial: Number(tabla[caseta.Nombre].existenciaInicial) || 0,
-            entrada: Number(tabla[caseta.Nombre].entrada) || 0,
-            mortalidad: Number(tabla[caseta.Nombre].mortalidad) || 0,
-            salida: Number(tabla[caseta.Nombre].salida) || 0,
-            edad: Number(tabla[caseta.Nombre].edad) || 0,
-            final: Number(tabla[caseta.Nombre].existenciaFinal) || 0,
+            inicial: Number(tabla[nombre].existenciaInicial) || 0,
+            entrada: Number(tabla[nombre].entrada) || 0,
+            mortalidad: Number(tabla[nombre].mortalidad) || 0,
+            salida: Number(tabla[nombre].salida) || 0,
+            edad: Number(tabla[nombre].edad) || 0,
+            final: Number(tabla[nombre].existenciaFinal) || 0,
           };
           await DatabaseQueries.insertExistencia(data);
         }
       }
-      setGuardado(true);
-      Alert.alert('Éxito', 'Datos de existencia guardados correctamente.');
-      navigation.replace('Menu');
+      return true;
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar los datos.');
+      return false;
     } finally {
       setGuardando(false);
     }
@@ -264,12 +271,32 @@ export default function ExistenciaScreen() {
     setCasetasAbiertas(prev => ({ ...prev, [caseta]: !prev[caseta] }));
   };
 
+  // useEffect para limpiar los inputs al entrar
+  useEffect(() => {
+    if (!casetasFiltradas || !granjaId) return;
+    setGuardado(false); // Reiniciar el estado de guardado al entrar
+    setTabla(() => {
+      const obj: Record<string, CasetaExistencia> = {};
+      casetasFiltradas.forEach(caseta => {
+        obj[caseta.Nombre] = {
+          existenciaInicial: '',
+          entrada: '',
+          mortalidad: '',
+          salida: '',
+          edad: '',
+          existenciaFinal: '0',
+        };
+      });
+      return obj;
+    });
+  }, [casetasFiltradas.length, granjaId, fechaHoy]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.replace('Menu')}
+          onPress={handleBack}
         >
           <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>

@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import AppNavigator from './src/navigation/navigation';
 import { dbManager } from './src/database/offline/db'; // Ajusta la ruta según tu estructura
+import { runDatabaseDiagnostic } from './src/database/offline/dbDiagnostic';
 import { SeccionContext } from './src/views/EnvaseScreen';
 import { View, Text } from 'react-native'; // Added View and Text import
 
@@ -11,20 +12,21 @@ export default function App() {
   const [dbError, setDbError] = React.useState<string | null>(null);
 
   useEffect(() => {
-    // Inicializar la base de datos al arrancar la app
-    const initDB = async () => {
+    // Reiniciar y diagnosticar la base de datos al arrancar la app
+    const resetAndDiagnoseDB = async () => {
       try {
-        await dbManager.init();
+        await dbManager.resetDatabase();
+        await dbManager.diagnoseDatabase();
         setDbReady(true);
         setDbError(null);
-        console.log('Base de datos inicializada');
+        console.log('Base de datos reiniciada y diagnosticada');
       } catch (error) {
-        setDbError('Error al inicializar la base de datos.');
+        setDbError('Error al reiniciar o diagnosticar la base de datos.');
         setDbReady(false);
-        console.error('Error al inicializar la base de datos:', error);
+        console.error('Error al reiniciar o diagnosticar la base de datos:', error);
       }
     };
-    initDB();
+    resetAndDiagnoseDB();
   }, []);
 
   if (dbError) {

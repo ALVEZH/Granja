@@ -146,22 +146,41 @@ export default function EnvaseScreen() {
     );
   };
 
+  // Cambiar la flecha de regresar para mostrar alerta si hay datos sin guardar
+  const handleBack = () => {
+    if (hayDatosIngresados()) {
+      Alert.alert(
+        'Atención',
+        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => navigation.replace('Menu') }
+        ]
+      );
+    } else {
+      navigation.replace('Menu');
+    }
+  };
+
   // Guardar datos en la base de datos
   const handleGuardar = async () => {
     if (!seccionSeleccionada || !seccionSeleccionada.Nombre) {
       Alert.alert('Error', 'No se ha seleccionado una sección.');
       return;
     }
-    await guardarEnvases(false);
-    // Limpiar la tabla local después de guardar (pero NO borrar los datos locales)
-    setTabla(() => {
-      const obj: any = {};
-      envases.forEach(envase => {
-        obj[envase] = { existenciaInicial: '', recibido: '', consumo: '', existenciaFinal: '0' };
+    const exito = await guardarEnvases(false);
+    if (exito) {
+      setTabla(() => {
+        const obj: any = {};
+        envases.forEach(envase => {
+          obj[envase] = { existenciaInicial: '', recibido: '', consumo: '', existenciaFinal: '0' };
+        });
+        return obj;
       });
-      return obj;
-    });
-    setGuardado(true);
+      setGuardado(true);
+      Alert.alert('Éxito', 'Datos de envase guardados correctamente.');
+    }
+    // NO navegar aquí
   };
 
   const handleContinuar = () => {
@@ -180,29 +199,28 @@ export default function EnvaseScreen() {
 
   // Función auxiliar para guardar los datos
   const guardarEnvases = async (forzar: boolean) => {
-    if (guardando) return;
+    if (guardando) return false;
     setGuardando(true);
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
       for (const envase of envases) {
-          const data: any = {
+        const data: any = {
           caseta: envase, // El tipo de envase es la caseta
-            fecha: fechaHoy,
-            granja_id: (seccionSeleccionada as any)?.GranjaID ?? null,
-            tipo: envase,
-            inicial: Number(tabla[envase].existenciaInicial) || 0,
-            recibido: Number(tabla[envase].recibido) || 0,
-            consumo: Number(tabla[envase].consumo) || 0,
-            final: Number(tabla[envase].existenciaFinal) || 0,
-          };
-          await DatabaseQueries.insertEnvase(data);
-        }
-      setGuardado(true);
-      Alert.alert('Éxito', 'Datos de envase guardados correctamente.');
-      navigation.replace('Menu');
+          fecha: fechaHoy,
+          granja_id: (seccionSeleccionada as any)?.GranjaID ?? null,
+          tipo: envase,
+          inicial: Number(tabla[envase].existenciaInicial) || 0,
+          recibido: Number(tabla[envase].recibido) || 0,
+          consumo: Number(tabla[envase].consumo) || 0,
+          final: Number(tabla[envase].existenciaFinal) || 0,
+        };
+        await DatabaseQueries.insertEnvase(data);
+      }
+      return true;
     } catch (error) {
       console.error('Error al guardar:', error);
       Alert.alert('Error', 'No se pudieron guardar los datos.');
+      return false;
     } finally {
       setGuardando(false);
     }
@@ -230,12 +248,24 @@ export default function EnvaseScreen() {
   // Filtrar solo las casetas de la granja seleccionada (por si la API no lo hace)
   const casetasFiltradas = casetas?.filter(c => c.GranjaID === granjaId) ?? [];
 
+  // useEffect para limpiar los inputs al entrar
+  React.useEffect(() => {
+    setGuardado(false);
+    setTabla(() => {
+      const obj: any = {};
+      envases.forEach(envase => {
+        obj[envase] = { existenciaInicial: '', recibido: '', consumo: '', existenciaFinal: '0' };
+      });
+      return obj;
+    });
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.replace('Menu')}
+          onPress={handleBack}
         >
           <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>

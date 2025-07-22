@@ -292,6 +292,22 @@ export class DatabaseQueries {
     }
   }
 
+  static async deleteExistenciaByFecha(fecha: string, granja_id: number): Promise<void> {
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para deleteExistenciaByFecha:", e);
+      return;
+    }
+    try {
+      const query = "DELETE FROM existencia WHERE fecha = ? AND granja_id = ?";
+      await db.runAsync(query, [fecha, granja_id]);
+    } catch (error) {
+      console.error("Error al eliminar existencia por fecha:", error);
+    }
+  }
+
   // ENVASE
   static async insertEnvase(data: EnvaseData): Promise<void> {
     let db: any;
@@ -337,6 +353,22 @@ export class DatabaseQueries {
     } catch (error) {
       console.error("Error al obtener envase por fecha:", error);
       return [];
+    }
+  }
+
+  static async deleteEnvaseByFecha(fecha: string, granja_id: number): Promise<void> {
+    let db: any;
+    try {
+      db = dbManager.getDatabase();
+    } catch (e) {
+      console.error("No se pudo obtener la base de datos para deleteEnvaseByFecha:", e);
+      return;
+    }
+    try {
+      const query = "DELETE FROM envase WHERE fecha = ? AND granja_id = ?";
+      await db.runAsync(query, [fecha, granja_id]);
+    } catch (error) {
+      console.error("Error al eliminar envase por fecha:", error);
     }
   }
 
