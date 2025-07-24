@@ -227,6 +227,10 @@ export default function ExistenciaScreen() {
     if (exito) {
       setTabla({});
       setGuardado(true);
+      // Recargar el acumulado después de guardar para que los totales reflejen la suma
+      if (granjaId) {
+        DatabaseQueries.getExistenciaByFecha(fechaHoy, granjaId).then(setExistenciaAcumulada);
+      }
       Alert.alert('Éxito', 'Datos de existencia guardados correctamente.');
     }
     // NO navegar aquí
@@ -245,6 +249,7 @@ export default function ExistenciaScreen() {
   const guardarExistencia = async (forzar: boolean) => {
     if (guardando) return false;
     setGuardando(true);
+    let algunGuardado = false;
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
       for (const caseta of casetasFiltradas) {
@@ -267,8 +272,17 @@ export default function ExistenciaScreen() {
             edad: Number(tabla[nombre].edad) || 0,
             final: null, // No enviar el total calculado, dejar que la suma la haga la base de datos
           };
-          await DatabaseQueries.insertExistencia(data);
+          try {
+            await DatabaseQueries.insertExistencia(data);
+            algunGuardado = true;
+          } catch (error) {
+            // Si falla una caseta, sigue con las demás
+            console.error('Error guardando caseta', nombre, error);
+          }
         }
+      }
+      if (!algunGuardado) {
+        throw new Error('No se pudieron guardar los datos.');
       }
       return true;
     } catch (error) {

@@ -137,28 +137,19 @@ export class DatabaseQueries {
       console.error("No se pudo obtener la base de datos para insertAlimento:", e);
       return;
     }
-    
-    // Validar datos de entrada
-    if (!data) {
-      console.error("insertAlimento: datos nulos o indefinidos");
-      return;
+    // Buscar si ya existe un registro para la caseta, fecha y granja
+    const selectQuery = `SELECT * FROM alimento WHERE caseta = ? AND fecha = ? AND granja_id = ?`;
+    const existing = await db.getFirstAsync(selectQuery, [data.caseta, data.fecha, data.granja_id]);
+    let newData = { ...data };
+    if (existing) {
+      // Sumar los valores nuevos a los existentes
+      newData = {
+        ...data,
+        existencia_inicial: (existing.existencia_inicial || 0) + (data.existencia_inicial || 0),
+        entrada: (existing.entrada || 0) + (data.entrada || 0),
+        consumo: (existing.consumo || 0) + (data.consumo || 0),
+      };
     }
-    
-    if (!data.caseta || typeof data.caseta !== 'string') {
-      console.error("insertAlimento: caseta inválida:", data.caseta);
-      return;
-    }
-    
-    if (!data.fecha || typeof data.fecha !== 'string') {
-      console.error("insertAlimento: fecha inválida:", data.fecha);
-      return;
-    }
-    
-    if (data.granja_id === null || data.granja_id === undefined || isNaN(data.granja_id)) {
-      console.error("insertAlimento: granja_id inválido:", data.granja_id);
-      return;
-    }
-    
     try {
       // Verificar que la tabla existe
       const tableCheck = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table' AND name='alimento'");
@@ -166,39 +157,23 @@ export class DatabaseQueries {
         console.error("insertAlimento: La tabla 'alimento' no existe");
         return;
       }
-      
       const query = `
         INSERT OR REPLACE INTO alimento (
           caseta, fecha, granja_id, existencia_inicial, entrada, consumo, tipo, edad
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      
-      // Preparar valores con validación
       const valores = [
         data.caseta || '',
         data.fecha || '',
         data.granja_id || 0,
-        data.existencia_inicial || 0,
-        data.entrada || 0,
-        data.consumo || 0,
+        newData.existencia_inicial || 0,
+        newData.entrada || 0,
+        newData.consumo || 0,
         data.tipo || '',
         data.edad || '',
       ];
-      
-      console.log("insertAlimento: Insertando datos:", {
-        caseta: data.caseta,
-        fecha: data.fecha,
-        granja_id: data.granja_id,
-        existencia_inicial: data.existencia_inicial,
-        entrada: data.entrada,
-        consumo: data.consumo,
-        tipo: data.tipo,
-        edad: data.edad
-      });
-      
       await db.runAsync(query, valores);
       console.log("insertAlimento: Datos insertados correctamente");
-      
     } catch (error) {
       console.error("Error al guardar alimento:", error);
       console.error("Datos que causaron el error:", data);
@@ -318,6 +293,7 @@ export class DatabaseQueries {
       ])
     } catch (error) {
       console.error("Error al guardar existencia:", error);
+      throw error;
     }
   }
 

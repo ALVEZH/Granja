@@ -197,6 +197,10 @@ export default function AlimentoScreen() {
         return obj;
       });
       setGuardado(true);
+      // Recargar el acumulado después de guardar para que los totales reflejen la suma
+      if (granjaId) {
+        DatabaseQueries.getAlimentoByFecha(fechaHoy, granjaId).then(setAlimentoAcumulado);
+      }
       Alert.alert('Éxito', 'Datos de alimentos guardados correctamente.');
     }
     // NO navegar aquí

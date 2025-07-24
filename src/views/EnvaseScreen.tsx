@@ -218,6 +218,22 @@ export default function EnvaseScreen() {
         return obj;
       });
       setGuardado(true);
+      // Recargar el acumulado después de guardar para que los totales reflejen la suma
+      if ((seccionSeleccionada as any)?.GranjaID) {
+        const fechaHoy = new Date().toISOString().split('T')[0];
+        DatabaseQueries.getEnvaseByFecha(fechaHoy, (seccionSeleccionada as any)?.GranjaID).then(datos => {
+          const acumulado: any = {};
+          datos.forEach((row: any) => {
+            acumulado[row.tipo] = {
+              existenciaInicial: row.inicial || 0,
+              recibido: row.recibido || 0,
+              consumo: row.consumo || 0,
+              existenciaFinal: row.final || 0,
+            };
+          });
+          setEnvaseAcumulado(acumulado);
+        });
+      }
       Alert.alert('Éxito', 'Datos de envase guardados correctamente.');
     }
     // NO navegar aquí
