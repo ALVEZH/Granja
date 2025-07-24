@@ -16,6 +16,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useSeccion } from './EnvaseScreen';
+import Modal from 'react-native-modal';
 
 type MenuScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -32,24 +33,18 @@ export default function MenuScreen() {
     Existencia: false,
     Envase: false,
   });
+  // Estado para mostrar el modal de cerrar sesión
+  const [modalCerrarSesion, setModalCerrarSesion] = useState(false);
 
   // Lógica de cierre de sesión
   const handleCerrarSesion = () => {
-    Alert.alert(
-      'Cerrar sesión',
-      '¿Quieres cerrar la sesión?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Cerrar sesión',
-          style: 'destructive',
-          onPress: () => {
-            setSeccionSeleccionada?.(null);
-            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-          }
-        }
-      ]
-    );
+    setModalCerrarSesion(true);
+  };
+
+  const confirmarCerrarSesion = () => {
+    setModalCerrarSesion(false);
+    setSeccionSeleccionada?.(null);
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   // Actualizar estado de completado al volver al menú (puedes personalizar la lógica)
@@ -80,6 +75,28 @@ export default function MenuScreen() {
           <Image source={require('../../assets/Iconos/CerrarSesion.png')} style={{ width: 28, height: 28 }} resizeMode="contain" />
         </TouchableOpacity>
       </View>
+      {/* Modal personalizado para cerrar sesión */}
+      <Modal isVisible={modalCerrarSesion} onBackdropPress={() => setModalCerrarSesion(false)}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 28, alignItems: 'center' }}>
+          <Ionicons name="log-out-outline" size={48} color="#e53935" style={{ marginBottom: 12 }} />
+          <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 10, color: '#2a3a4b', textAlign: 'center' }}>¿Quieres cerrar la sesión?</Text>
+          <Text style={{ color: '#666', fontSize: 15, marginBottom: 24, textAlign: 'center' }}>Se cerrará tu sesión y volverás a la pantalla de inicio de sesión.</Text>
+          <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between' }}>
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: '#e0e7ef', borderRadius: 8, padding: 14, alignItems: 'center', marginRight: 8 }}
+              onPress={() => setModalCerrarSesion(false)}
+            >
+              <Text style={{ color: '#2a3a4b', fontWeight: 'bold', fontSize: 16 }}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: '#e53935', borderRadius: 8, padding: 14, alignItems: 'center', marginLeft: 8 }}
+              onPress={confirmarCerrarSesion}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Cerrar sesión</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       {/* Texto de sección actual */}
       <Text style={{ textAlign: 'center', color: '#517aa2', fontSize: 16, marginBottom: 10 }}>
         Estás en la sección: <Text style={{ fontWeight: 'bold' }}>{seccionSeleccionada?.Nombre || ''}</Text>
