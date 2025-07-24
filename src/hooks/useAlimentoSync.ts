@@ -7,7 +7,7 @@ export const useAlimentoSync = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
 
-  const syncAlimentoData = async (granjaId: number, fecha: string) => {
+  const syncAlimentoData = async (granjaId: number, fecha: string, mostrarAlerta = true) => {
     setIsSyncing(true);
     setSyncStatus('🔄 Iniciando sincronización de alimentos...');
 
@@ -95,19 +95,19 @@ export const useAlimentoSync = () => {
 
       if (fallidos === 0 && exitosos > 0) {
         setSyncStatus(`✅ Sincronización completada: ${exitosos} registros subidos exitosamente`);
-        Alert.alert('Sincronización de Alimentos', `¡Éxito!\n${resumen}`);
+        if (mostrarAlerta) Alert.alert('Sincronización de Alimentos', `¡Éxito!\nIntentados: ${intentados}\nExitosos: ${exitosos}\nFallidos: ${fallidos}`);
       } else if (exitosos > 0 && fallidos > 0) {
         setSyncStatus(`⚠️ Sincronización parcial: ${exitosos} exitosos, ${fallidos} fallidos`);
-        Alert.alert('Sincronización de Alimentos', `Parcialmente exitoso:\n${resumen}`);
+        if (mostrarAlerta) Alert.alert('Sincronización de Alimentos', `Parcialmente exitoso:\nIntentados: ${intentados}\nExitosos: ${exitosos}\nFallidos: ${fallidos}`);
       } else if (fallidos > 0 && exitosos === 0) {
         setSyncStatus(`❌ Sincronización fallida: ${fallidos} registros fallidos`);
-        Alert.alert('Sincronización de Alimentos', `Fallido:\n${resumen}`);
+        if (mostrarAlerta) Alert.alert('Sincronización de Alimentos', `Fallido:\nIntentados: ${intentados}\nExitosos: ${exitosos}\nFallidos: ${fallidos}`);
       }
 
     } catch (error: any) {
       console.error('❌ Error en sincronización:', error);
       setSyncStatus(`❌ Error: ${error}`);
-      Alert.alert('Sincronización de Alimentos', `Error inesperado:\n${error.message || error}`);
+      if (mostrarAlerta) Alert.alert('Sincronización de Alimentos', `Error inesperado:\n${error.message || error}`);
     } finally {
       setIsSyncing(false);
     }

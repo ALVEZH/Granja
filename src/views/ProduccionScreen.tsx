@@ -10,6 +10,7 @@ import { useSeccion } from './EnvaseScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useCasetas } from '../hooks/useCasetas';
 import { useGranjas } from '../hooks/useGranjas';
+import Modal from 'react-native-modal';
 
 const tiposHuevo = [
   'BLANCO', 'ROTO 1', 'ROTO 2', 'MANCHADO', 'FRAGIL 1', 'FRAGIL 2', 'YEMA', 'B1', 'EXTRA 240PZS'
@@ -50,11 +51,14 @@ export default function ProduccionScreen() {
   // Estructura: { [caseta]: { [tipo]: { cajas: string, restos: string } } }
   const [tabla, setTabla] = useState<Record<string, CasetaProduccion>>({});
 
+  // Estado para saber si los datos ya se guardaron
+  const [guardado, setGuardado] = useState(false);
+
   // Cargar datos existentes cuando cambian las casetas o la fecha
   useEffect(() => {
     if (!casetasFiltradas || !granjaId) return;
     setGuardado(false); // Reiniciar el estado de guardado al entrar
-    // SIEMPRE inicializar los inputs vacíos
+    // SIEMPRE inicializar los inputs vacíos, pero los totales sí mostrarán el acumulado
     setTabla(() => {
       const obj: Record<string, CasetaProduccion> = {};
       casetasFiltradas.forEach(caseta => {
@@ -67,21 +71,47 @@ export default function ProduccionScreen() {
     });
   }, [casetasFiltradas.length, granjaId, fechaHoy]);
 
-  // Calcular totales por tipo
+  // Para los totales, seguir usando los datos acumulados de la base de datos
+  const [produccionAcumulada, setProduccionAcumulada] = useState<any[]>([]);
+  useEffect(() => {
+    if (!granjaId) return;
+    DatabaseQueries.getProduccionByFecha(fechaHoy, granjaId).then(setProduccionAcumulada);
+  }, [granjaId, fechaHoy, guardado]);
+
+  // Totales en tiempo real: suma del acumulado en base de datos + lo que está en los inputs
   const totales = useMemo(() => {
     const t: any = {};
     tiposHuevo.forEach(tipo => {
       let cajas = 0, restos = 0;
       casetasFiltradas.forEach(caseta => {
-        cajas += Number(tabla[caseta.Nombre]?.[tipo]?.cajas) || 0;
-        restos += Number(tabla[caseta.Nombre]?.[tipo]?.restos) || 0;
+        // Acumulado en base de datos
+        const row = produccionAcumulada.find((p: any) => p.caseta === caseta.Nombre);
+        let baseCajas = 0, baseRestos = 0;
+        switch (tipo) {
+          case 'BLANCO': baseCajas = Number(row?.blanco_cajas) || 0; baseRestos = Number(row?.blanco_restos) || 0; break;
+          case 'ROTO 1': baseCajas = Number(row?.roto1_cajas) || 0; baseRestos = Number(row?.roto1_restos) || 0; break;
+          case 'ROTO 2': baseCajas = Number(row?.roto2_cajas) || 0; baseRestos = Number(row?.roto2_restos) || 0; break;
+          case 'MANCHADO': baseCajas = Number(row?.manchado_cajas) || 0; baseRestos = Number(row?.manchado_restos) || 0; break;
+          case 'FRAGIL 1': baseCajas = Number(row?.fragil1_cajas) || 0; baseRestos = Number(row?.fragil1_restos) || 0; break;
+          case 'FRAGIL 2': baseCajas = Number(row?.fragil2_cajas) || 0; baseRestos = Number(row?.fragil2_restos) || 0; break;
+          case 'YEMA': baseCajas = Number(row?.yema_cajas) || 0; baseRestos = Number(row?.yema_restos) || 0; break;
+          case 'B1': baseCajas = Number(row?.b1_cajas) || 0; baseRestos = Number(row?.b1_restos) || 0; break;
+          case 'EXTRA 240PZS': baseCajas = Number(row?.extra240_cajas) || 0; baseRestos = Number(row?.extra240_restos) || 0; break;
+          default: break;
+        }
+        // Lo que está en los inputs
+        const inputCajas = Number(tabla[caseta.Nombre]?.[tipo]?.cajas) || 0;
+        const inputRestos = Number(tabla[caseta.Nombre]?.[tipo]?.restos) || 0;
+        cajas += baseCajas + inputCajas;
+        restos += baseRestos + inputRestos;
       });
       t[tipo] = { cajas, restos };
     });
     return t;
-  }, [tabla, casetasFiltradas]); // Asegurar que se recalcula si cambian las casetas
+  }, [produccionAcumulada, casetasFiltradas, tabla]);
 
-  // Manejar cambios en la tabla
+  // Validación: alerta si ya hay datos guardados en cualquier caseta y se intenta registrar más
+  const [alertaCasetas, setAlertaCasetas] = useState<Record<string, boolean>>({});
   const handleChange = (caseta: string, tipo: string, campo: 'cajas' | 'restos', valor: string) => {
     setTabla((prev: typeof tabla) => ({
       ...prev,
@@ -119,26 +149,21 @@ export default function ProduccionScreen() {
     setCasetasAbiertas(prev => ({ ...prev, [caseta]: !prev[caseta] }));
   };
 
-  // Estado para saber si los datos ya se guardaron
-  const [guardado, setGuardado] = useState(false);
+  // 1. Agrega estado para mostrar el modal
+  const [modalSinGuardar, setModalSinGuardar] = useState(false);
+  const [onConfirmSalir, setOnConfirmSalir] = useState<null | (() => void)>(null);
 
-  // Declarar el listener fuera para poder removerlo
+  // 2. Reemplaza Alert.alert por setModalSinGuardar(true) y setOnConfirmSalir(() => ...)
   const onBeforeRemove = (e: any) => {
-    if (guardado) {
-      // Permitir salir sin alerta si los datos acaban de guardarse
-      return;
-    }
+    if (guardado) return;
     if (hayDatosIngresados()) {
       e.preventDefault();
-      Alert.alert(
-        'Atención',
-        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-        [
-          { text: 'OK', style: 'cancel' }
-        ]
-      );
+      setOnConfirmSalir(() => () => {
+        setModalSinGuardar(false);
+        navigation.dispatch(e.data.action);
+      });
+      setModalSinGuardar(true);
     }
-    // Si no hay datos, permite salir normalmente
   };
 
   // Determinar si hay datos ingresados en la tabla
@@ -219,13 +244,8 @@ export default function ProduccionScreen() {
   // Botón para continuar (redirigir al menú solo si no hay datos sin guardar)
   const handleContinuar = () => {
     if (hayDatosIngresados()) {
-      Alert.alert(
-        'Atención',
-        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-        [
-          { text: 'OK', style: 'cancel' }
-        ]
-      );
+      setOnConfirmSalir(null);
+      setModalSinGuardar(true);
       return;
     }
     navigation.replace('Menu');
@@ -335,14 +355,11 @@ export default function ProduccionScreen() {
   // Cambiar la flecha de regresar para mostrar alerta si hay datos sin guardar
   const handleBack = () => {
     if (hayDatosIngresados()) {
-      Alert.alert(
-        'Atención',
-        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Salir', style: 'destructive', onPress: () => navigation.replace('Menu') }
-        ]
-      );
+      setOnConfirmSalir(() => () => {
+        setModalSinGuardar(false);
+        navigation.replace('Menu');
+      });
+      setModalSinGuardar(true);
     } else {
       navigation.replace('Menu');
     }
@@ -453,6 +470,29 @@ export default function ProduccionScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <Modal isVisible={modalSinGuardar} onBackdropPress={() => setModalSinGuardar(false)}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 28, alignItems: 'center', minWidth: 260 }}>
+          <Ionicons name="alert-circle-outline" size={48} color="#e6b800" style={{ marginBottom: 12 }} />
+          <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 10, color: '#2a3a4b', textAlign: 'center' }}>¡Atención!</Text>
+          <Text style={{ color: '#666', fontSize: 15, marginBottom: 24, textAlign: 'center' }}>Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.</Text>
+          <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'center' }}>
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: '#e0e7ef', borderRadius: 8, padding: 14, alignItems: 'center', marginRight: onConfirmSalir ? 8 : 0 }}
+              onPress={() => setModalSinGuardar(false)}
+            >
+              <Text style={{ color: '#2a3a4b', fontWeight: 'bold', fontSize: 16 }}>Cancelar</Text>
+            </TouchableOpacity>
+            {onConfirmSalir && (
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#e53935', borderRadius: 8, padding: 14, alignItems: 'center', marginLeft: 8 }}
+                onPress={onConfirmSalir}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Salir</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

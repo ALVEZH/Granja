@@ -304,7 +304,7 @@ export default function ResumenSeccion() {
   }, [alimento, casetasValidas]) || { existenciaInicial: 0, entrada: 0, consumo: 0 };
 
   const totalesExistencia = useMemo(() => {
-    let inicial = 0, entrada = 0, mortalidad = 0, salida = 0, final = 0;
+    let inicial = 0, entrada = 0, mortalidad = 0, salida = 0;
     casetasValidas.forEach(caseta => {
       const row = existencia.find((r: any) => r.caseta === caseta);
       if (row) {
@@ -312,9 +312,9 @@ export default function ResumenSeccion() {
         entrada += Number(row.entrada || 0);
         mortalidad += Number(row.mortalidad || 0);
         salida += Number(row.salida || 0);
-        final += Number(row.final || 0);
       }
     });
+    const final = inicial + entrada - mortalidad - salida;
     return { inicial, entrada, mortalidad, salida, final };
   }, [existencia, casetasValidas]);
 
@@ -344,9 +344,9 @@ export default function ResumenSeccion() {
         Alert.alert('Error', 'Error al sincronizar Producción. No se exportó el PDF.');
         return;
       }
-      // 2. Sincronizar Alimentos
+      // 2. Sincronizar Alimentos (sin alerta)
       try {
-        await syncAlimentoData(granjaId, fecha);
+        await syncAlimentoData(granjaId, fecha, false);
       } catch (error) {
         Alert.alert('Error', 'Error al sincronizar Alimentos. No se exportó el PDF.');
         return;
@@ -414,8 +414,10 @@ export default function ResumenSeccion() {
         Alert.alert('Error', 'Error al sincronizar Envase. No se exportó el PDF.');
         return;
       }
-      // Mostrar modal de exportación correcta
-      // setModalExportacion(true); // Eliminar esta línea
+      // Mostrar modal bonito de exportación correcta
+      setModalExportacion(true);
+      setTimeout(() => setModalExportacion(false), 1500);
+      // Si todo fue exitoso, exportar PDF
       setTimeout(async () => {
         // setModalExportacion(false); // Eliminar esta línea
         // Si todo fue exitoso, exportar PDF
@@ -483,7 +485,18 @@ export default function ResumenSeccion() {
         html += `<table class='tabla-mini'><tr><th>CASETA</th><th>EXIST. INICIAL</th><th>ENTRADA</th><th>MORTALIDAD</th><th>SALIDA</th><th>EDAD</th><th>EXIST. FINAL</th></tr>`;
         casetasValidas.forEach(caseta => {
           const row = existencia.find((r: any) => r.caseta === caseta) || {};
-          html += `<tr><td>${caseta}</td><td>${row.inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.mortalidad || ''}</td><td>${row.salida || ''}</td><td>${row.edad || ''}</td><td>${row.final || ''}</td></tr>`;
+          let existenciaFinal = '';
+          if (row.final !== undefined && row.final !== null && row.final !== '') {
+            existenciaFinal = String(row.final);
+          } else {
+            const ini = Number(row.inicial) || 0;
+            const ent = Number(row.entrada) || 0;
+            const mort = Number(row.mortalidad) || 0;
+            const sal = Number(row.salida) || 0;
+            const calcFinal = ini + ent - mort - sal;
+            existenciaFinal = calcFinal !== 0 ? String(calcFinal) : '';
+          }
+          html += `<tr><td>${caseta}</td><td>${row.inicial || ''}</td><td>${row.entrada || ''}</td><td>${row.mortalidad || ''}</td><td>${row.salida || ''}</td><td>${row.edad || ''}</td><td>${existenciaFinal === '' ? '' : String(existenciaFinal)}</td></tr>`;
         });
         html += `<tr><td><b>TOTAL</b></td><td><b>${totalesExistencia.inicial}</b></td><td><b>${totalesExistencia.entrada}</b></td><td><b>${totalesExistencia.mortalidad}</b></td><td><b>${totalesExistencia.salida}</b></td><td></td><td><b>${totalesExistencia.final}</b></td></tr></table></div>`;
         // ENVASE
@@ -491,7 +504,17 @@ export default function ResumenSeccion() {
         html += `<table class='tabla-mini'><tr><th>TIPO</th><th>EXIST. INICIAL</th><th>RECIBIDO</th><th>CONSUMO</th><th>EXIST. FINAL</th></tr>`;
         envases.forEach(envaseTipo => {
           const row = envase.find((r: any) => r.tipo === envaseTipo) || {};
-          html += `<tr><td>${envaseTipo}</td><td>${row.inicial || ''}</td><td>${row.recibido || ''}</td><td>${row.consumo || ''}</td><td>${row.final || ''}</td></tr>`;
+          let existenciaFinal = '';
+          if (row.final !== undefined && row.final !== null && row.final !== '') {
+            existenciaFinal = String(row.final);
+          } else {
+            const ini = Number(row.inicial) || 0;
+            const rec = Number(row.recibido) || 0;
+            const cons = Number(row.consumo) || 0;
+            const calcFinal = ini + rec - cons;
+            existenciaFinal = calcFinal !== 0 ? String(calcFinal) : '';
+          }
+          html += `<tr><td>${envaseTipo}</td><td>${row.inicial || ''}</td><td>${row.recibido || ''}</td><td>${row.consumo || ''}</td><td>${existenciaFinal === '' ? '' : String(existenciaFinal)}</td></tr>`;
         });
         html += `<tr><td><b>TOTAL</b></td><td><b>${totalesEnvase.inicial}</b></td><td><b>${totalesEnvase.recibido}</b></td><td><b>${totalesEnvase.consumo}</b></td><td><b>${totalesEnvase.final}</b></td></tr></table></div>`;
         html += `</div>`;
@@ -735,13 +758,12 @@ export default function ResumenSeccion() {
     );
   };
 
-  // Estado para mostrar el modal de exportación
-  const [modalExportacion, setModalExportacion] = useState(false);
-
   // Eliminar toda referencia a modalEliminado y el Modal correspondiente
   // Eliminar los modales de edición de nombre y observaciones
   // Modal personalizado para exportación
   const [modalEliminado, setModalEliminado] = useState(false);
+  // 1. Agrega estado para mostrar el modal de exportación
+  const [modalExportacion, setModalExportacion] = useState(false);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -885,14 +907,33 @@ export default function ResumenSeccion() {
             </View>
             {casetasValidas.map((caseta, idx) => {
               const row = existencia.find((r: any) => r.caseta === caseta) || {};
+              const inicialEx = row.inicial != null && row.inicial !== 0 ? String(row.inicial) : '';
+              const entradaEx = row.entrada != null && row.entrada !== 0 ? String(row.entrada) : '';
+              const mortalidadEx = row.mortalidad != null && row.mortalidad !== 0 ? String(row.mortalidad) : '';
+              const salidaEx = row.salida != null && row.salida !== 0 ? String(row.salida) : '';
+              const edadEx = row.edad != null && row.edad !== 0 ? String(row.edad) : '';
+              // Si no hay entrada, mortalidad ni salida, existencia final = inicial
+              let finalEx = '';
+              if (row.final != null && row.final !== 0) {
+                finalEx = String(row.final);
+              } else if (inicialEx !== '' && entradaEx === '' && mortalidadEx === '' && salidaEx === '') {
+                finalEx = inicialEx;
+              } else if (inicialEx !== '' || entradaEx !== '' || mortalidadEx !== '' || salidaEx !== '') {
+                const ini = Number(inicialEx) || 0;
+                const ent = Number(entradaEx) || 0;
+                const mort = Number(mortalidadEx) || 0;
+                const sal = Number(salidaEx) || 0;
+                const calcFinal = ini + ent - mort - sal;
+                finalEx = calcFinal !== 0 ? String(calcFinal) : '';
+              }
               const cells = [
                 <View key="caseta" style={styles.cell}><Text style={styles.cellText}>{caseta}</Text></View>,
-                <View key="inicial" style={styles.cell}><Text style={styles.cellText}>{row.inicial || ''}</Text></View>,
-                <View key="entrada" style={styles.cell}><Text style={styles.cellText}>{row.entrada || ''}</Text></View>,
-                <View key="mortalidad" style={styles.cell}><Text style={styles.cellText}>{row.mortalidad || ''}</Text></View>,
-                <View key="salida" style={styles.cell}><Text style={styles.cellText}>{row.salida || ''}</Text></View>,
-                <View key="edad" style={styles.cell}><Text style={styles.cellText}>{row.edad || ''}</Text></View>,
-                <View key="final" style={styles.cell}><Text style={styles.cellText}>{row.final || ''}</Text></View>,
+                <View key="inicial" style={styles.cell}><Text style={styles.cellText}>{inicialEx === '' ? '' : String(inicialEx)}</Text></View>,
+                <View key="entrada" style={styles.cell}><Text style={styles.cellText}>{entradaEx === '' ? '' : String(entradaEx)}</Text></View>,
+                <View key="mortalidad" style={styles.cell}><Text style={styles.cellText}>{mortalidadEx === '' ? '' : String(mortalidadEx)}</Text></View>,
+                <View key="salida" style={styles.cell}><Text style={styles.cellText}>{salidaEx === '' ? '' : String(salidaEx)}</Text></View>,
+                <View key="edad" style={styles.cell}><Text style={styles.cellText}>{edadEx === '' ? '' : String(edadEx)}</Text></View>,
+                <View key="final" style={styles.cell}><Text style={styles.cellText}>{finalEx === '' ? '' : String(finalEx)}</Text></View>,
               ];
               return (
                 <View key={caseta} style={[styles.dataRow, idx % 2 === 1 && styles.dataRowAlt, { flexDirection: 'row' }]}> 
@@ -904,16 +945,43 @@ export default function ResumenSeccion() {
                 </View>
               );
             })}
+            {/* Totales: suma solo los valores mostrados (no ceros invisibles) */}
             <View style={[styles.dataRow, { flexDirection: 'row' }]}> 
-              {[
-                <View key="total" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>TOTAL</Text></View>,
-                <View key="inicial" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.inicial}</Text></View>,
-                <View key="entrada" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.entrada}</Text></View>,
-                <View key="mortalidad" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.mortalidad}</Text></View>,
-                <View key="salida" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.salida}</Text></View>,
-                <View key="edad" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}></Text></View>,
-                <View key="final" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesExistencia.final}</Text></View>,
-              ].map((cell, i, arr) =>
+              {(() => {
+                let totalInicial = 0, totalEntrada = 0, totalMortalidad = 0, totalSalida = 0, totalEdad = 0, totalFinal = 0;
+                casetasValidas.forEach(caseta => {
+                  const row = existencia.find((r: any) => r.caseta === caseta) || {};
+                  const ini = row.inicial != null && row.inicial !== 0 ? row.inicial : null;
+                  const ent = row.entrada != null && row.entrada !== 0 ? row.entrada : null;
+                  const mort = row.mortalidad != null && row.mortalidad !== 0 ? row.mortalidad : null;
+                  const sal = row.salida != null && row.salida !== 0 ? row.salida : null;
+                  const edad = row.edad != null && row.edad !== 0 ? row.edad : null;
+                  let fin = null;
+                  if (row.final != null && row.final !== 0) {
+                    fin = row.final;
+                  } else if (ini != null && ent == null && mort == null && sal == null) {
+                    fin = ini;
+                  } else if (ini != null || ent != null || mort != null || sal != null) {
+                    const calcFinal = (ini || 0) + (ent || 0) - (mort || 0) - (sal || 0);
+                    fin = calcFinal !== 0 ? calcFinal : null;
+                  }
+                  if (ini != null) totalInicial += ini;
+                  if (ent != null) totalEntrada += ent;
+                  if (mort != null) totalMortalidad += mort;
+                  if (sal != null) totalSalida += sal;
+                  if (edad != null) totalEdad += edad;
+                  if (fin != null) totalFinal += fin;
+                });
+                return [
+                  <View key="total" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>TOTAL</Text></View>,
+                  <View key="inicial" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalInicial !== 0 ? String(totalInicial) : ''}</Text></View>,
+                  <View key="entrada" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalEntrada !== 0 ? String(totalEntrada) : ''}</Text></View>,
+                  <View key="mortalidad" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalMortalidad !== 0 ? String(totalMortalidad) : ''}</Text></View>,
+                  <View key="salida" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalSalida !== 0 ? String(totalSalida) : ''}</Text></View>,
+                  <View key="edad" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalEdad !== 0 ? String(totalEdad) : ''}</Text></View>,
+                  <View key="final" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalFinal !== 0 ? String(totalFinal) : ''}</Text></View>,
+                ];
+              })().map((cell, i, arr) =>
                 React.cloneElement(cell, {
                   style: [cell.props.style, i === arr.length - 1 && { borderRightWidth: 0 }]
                 })
@@ -940,12 +1008,29 @@ export default function ResumenSeccion() {
             </View>
             {envases.map((envaseTipo, idx) => {
               const row = envase.find((r: any) => r.tipo === envaseTipo) || {};
+              const existenciaInicialEnv = row.inicial != null && row.inicial !== 0 ? String(row.inicial) : '';
+              const recibidoEnv = row.recibido != null && row.recibido !== 0 ? String(row.recibido) : '';
+              const consumoEnv = row.consumo != null && row.consumo !== 0 ? String(row.consumo) : '';
+              // Si no hay recibido ni consumo, existencia final = existencia inicial
+              let existenciaFinalEnv = '';
+              if (row.final != null && row.final !== 0) {
+                existenciaFinalEnv = String(row.final);
+              } else if (existenciaInicialEnv !== '' && recibidoEnv === '' && consumoEnv === '') {
+                existenciaFinalEnv = existenciaInicialEnv;
+              } else if (existenciaInicialEnv !== '' || recibidoEnv !== '' || consumoEnv !== '') {
+                // Si hay algún dato, calcula existencia final
+                const ini = Number(existenciaInicialEnv) || 0;
+                const rec = Number(recibidoEnv) || 0;
+                const cons = Number(consumoEnv) || 0;
+                const calcFinal = ini + rec - cons;
+                existenciaFinalEnv = calcFinal !== 0 ? String(calcFinal) : '';
+              }
               const cells = [
                 <View key="tipo" style={styles.cell}><Text style={styles.cellText}>{envaseTipo}</Text></View>,
-                <View key="inicial" style={styles.cell}><Text style={styles.cellText}>{row.inicial || ''}</Text></View>,
-                <View key="recibido" style={styles.cell}><Text style={styles.cellText}>{row.recibido || ''}</Text></View>,
-                <View key="consumo" style={styles.cell}><Text style={styles.cellText}>{row.consumo || ''}</Text></View>,
-                <View key="final" style={styles.cell}><Text style={styles.cellText}>{row.final || ''}</Text></View>,
+                <View key="inicial" style={styles.cell}><Text style={styles.cellText}>{existenciaInicialEnv === '' ? '' : String(existenciaInicialEnv)}</Text></View>,
+                <View key="recibido" style={styles.cell}><Text style={styles.cellText}>{recibidoEnv === '' ? '' : String(recibidoEnv)}</Text></View>,
+                <View key="consumo" style={styles.cell}><Text style={styles.cellText}>{consumoEnv === '' ? '' : String(consumoEnv)}</Text></View>,
+                <View key="final" style={styles.cell}><Text style={styles.cellText}>{existenciaFinalEnv === '' ? '' : String(existenciaFinalEnv)}</Text></View>,
               ];
               return (
                 <View key={envaseTipo} style={[styles.dataRow, { flexDirection: 'row', backgroundColor: '#fff' }]}> 
@@ -957,14 +1042,37 @@ export default function ResumenSeccion() {
                 </View>
               );
             })}
+            {/* Totales: suma solo los valores mostrados (no ceros invisibles) */}
             <View style={[styles.dataRow, { flexDirection: 'row', backgroundColor: '#fff' }]}> 
-              {[
-                <View key="total" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>TOTAL</Text></View>,
-                <View key="inicial" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesEnvase.inicial}</Text></View>,
-                <View key="recibido" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesEnvase.recibido}</Text></View>,
-                <View key="consumo" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesEnvase.consumo}</Text></View>,
-                <View key="final" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalesEnvase.final}</Text></View>,
-              ].map((cell, i, arr) =>
+              {(() => {
+                let totalInicial = 0, totalRecibido = 0, totalConsumo = 0, totalFinal = 0;
+                envases.forEach(envaseTipo => {
+                  const row = envase.find((r: any) => r.tipo === envaseTipo) || {};
+                  const ini = row.inicial != null && row.inicial !== 0 ? row.inicial : null;
+                  const rec = row.recibido != null && row.recibido !== 0 ? row.recibido : null;
+                  const cons = row.consumo != null && row.consumo !== 0 ? row.consumo : null;
+                  let fin = null;
+                  if (row.final != null && row.final !== 0) {
+                    fin = row.final;
+                  } else if (ini != null && rec == null && cons == null) {
+                    fin = ini;
+                  } else if (ini != null || rec != null || cons != null) {
+                    const calcFinal = (ini || 0) + (rec || 0) - (cons || 0);
+                    fin = calcFinal !== 0 ? calcFinal : null;
+                  }
+                  if (ini != null) totalInicial += ini;
+                  if (rec != null) totalRecibido += rec;
+                  if (cons != null) totalConsumo += cons;
+                  if (fin != null) totalFinal += fin;
+                });
+                return [
+                  <View key="total" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>TOTAL</Text></View>,
+                  <View key="inicial" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalInicial !== 0 ? String(totalInicial) : ''}</Text></View>,
+                  <View key="recibido" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalRecibido !== 0 ? String(totalRecibido) : ''}</Text></View>,
+                  <View key="consumo" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalConsumo !== 0 ? String(totalConsumo) : ''}</Text></View>,
+                  <View key="final" style={styles.cell}><Text style={[styles.cellText, { fontWeight: 'bold' }]}>{totalFinal !== 0 ? String(totalFinal) : ''}</Text></View>,
+                ];
+              })().map((cell, i, arr) =>
                 React.cloneElement(cell, {
                   style: [cell.props.style, i === arr.length - 1 && { borderRightWidth: 0 }]
                 })
@@ -1027,7 +1135,7 @@ export default function ResumenSeccion() {
       <Modal isVisible={modalExportacion}>
         <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 28, alignItems: 'center', minWidth: 260 }}>
           <Ionicons name="checkmark-circle-outline" size={48} color="#1db954" style={{ marginBottom: 12 }} />
-          <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 10, color: '#2a3a4b', textAlign: 'center' }}>Exportación correcta</Text>
+          <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 10, color: '#2a3a4b', textAlign: 'center' }}>Exportación a PDF correcta</Text>
         </View>
       </Modal>
       {/* Eliminar la sección de botones y modales de nombres y observaciones */}

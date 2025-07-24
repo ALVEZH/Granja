@@ -8,6 +8,7 @@ import { RootStackParamList } from '../navigation/types';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useCasetas } from '../hooks/useCasetas';
 import { useGranjas } from '../hooks/useGranjas';
+import Modal from 'react-native-modal';
 
 // CONTEXTO GLOBAL DE SECCIÓN
 
@@ -63,23 +64,59 @@ export default function EnvaseScreen() {
     return obj;
   });
 
-  // Calcular totales y existencia final
+  // Estado para el acumulado de envases guardados
+  const [envaseAcumulado, setEnvaseAcumulado] = useState<any>({});
+  // Estado para mostrar la alerta de acumulación solo una vez por envase
+  const [alertaEnvases, setAlertaEnvases] = useState<{ [envase: string]: boolean }>({});
+
+  // Cargar datos acumulados al entrar
+  React.useEffect(() => {
+    const cargarAcumulado = async () => {
+      if (!seccionSeleccionada?.GranjaID) return;
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      const datos = await DatabaseQueries.getEnvaseByFecha(fechaHoy, seccionSeleccionada.GranjaID);
+      const acumulado: any = {};
+      datos.forEach((row: any) => {
+        acumulado[row.tipo] = {
+          existenciaInicial: row.inicial || 0,
+          recibido: row.recibido || 0,
+          consumo: row.consumo || 0,
+          existenciaFinal: row.final || 0,
+        };
+      });
+      setEnvaseAcumulado(acumulado);
+    };
+    cargarAcumulado();
+    // Limpiar inputs y alertas al entrar
+    setTabla(() => {
+      const obj: any = {};
+      envases.forEach(envase => {
+        obj[envase] = { existenciaInicial: '', recibido: '', consumo: '', existenciaFinal: '0' };
+      });
+      return obj;
+    });
+    setAlertaEnvases({});
+    setGuardado(false);
+  }, [seccionSeleccionada]);
+
+  // Totales en tiempo real: suma de acumulado + input
   const totales = useMemo(() => {
     let existenciaInicial = 0, recibido = 0, consumo = 0, existenciaFinal = 0;
     envases.forEach(envase => {
-      const inicial = Number(tabla[envase].existenciaInicial) || 0;
-      const rec = Number(tabla[envase].recibido) || 0;
-      const cons = Number(tabla[envase].consumo) || 0;
-      const final = inicial + rec - cons;
-      existenciaInicial += inicial;
-      recibido += rec;
-      consumo += cons;
+      const acumulado = envaseAcumulado[envase] || { existenciaInicial: 0, recibido: 0, consumo: 0, existenciaFinal: 0 };
+      const inputInicial = Number(tabla[envase].existenciaInicial) || 0;
+      const inputRecibido = Number(tabla[envase].recibido) || 0;
+      const inputConsumo = Number(tabla[envase].consumo) || 0;
+      const final = acumulado.existenciaInicial + acumulado.recibido - acumulado.consumo + inputInicial + inputRecibido - inputConsumo;
+      existenciaInicial += acumulado.existenciaInicial + inputInicial;
+      recibido += acumulado.recibido + inputRecibido;
+      consumo += acumulado.consumo + inputConsumo;
       existenciaFinal += final;
     });
     return { existenciaInicial, recibido, consumo, existenciaFinal };
-  }, [tabla]);
+  }, [tabla, envaseAcumulado]);
 
-  // Manejar cambios en la tabla
+  // Alerta de acumulación y cálculo de existencia final por envase
   const handleChange = (envase: string, campo: string, valor: string) => {
     setTabla((prev: any) => {
       const newTabla = {
@@ -89,11 +126,14 @@ export default function EnvaseScreen() {
           [campo]: valor.replace(/[^0-9.]/g, '')
         }
       };
-      // Calcular existencia final para este envase
+      // Calcular existencia final para este envase (acumulado + input)
+      const acumulado = envaseAcumulado[envase] || { existenciaInicial: 0, recibido: 0, consumo: 0 };
       const inicial = Number(newTabla[envase].existenciaInicial) || 0;
       const recibido = Number(newTabla[envase].recibido) || 0;
       const consumo = Number(newTabla[envase].consumo) || 0;
-      newTabla[envase].existenciaFinal = String(inicial + recibido - consumo);
+      newTabla[envase].existenciaFinal = String(
+        acumulado.existenciaInicial + acumulado.recibido - acumulado.consumo + inicial + recibido - consumo
+      );
       return newTabla;
     });
   };
@@ -115,24 +155,27 @@ export default function EnvaseScreen() {
     });
   };
 
+  // 1. Agrega estado para mostrar el modal
+  const [modalSinGuardar, setModalSinGuardar] = useState(false);
+  const [onConfirmSalir, setOnConfirmSalir] = useState<null | (() => void)>(null);
+
   useFocusEffect(
     React.useCallback(() => {
       const onBeforeRemove = (e: any) => {
+        if (guardado) return;
         if (hayDatosIngresados()) {
           e.preventDefault();
-          Alert.alert(
-            'Atención',
-            'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-            [
-              { text: 'OK', style: 'cancel' }
-            ]
-          );
+          setOnConfirmSalir(() => () => {
+            setModalSinGuardar(false);
+            navigation.dispatch(e.data.action);
+          });
+          setModalSinGuardar(true);
         }
         // Si no hay datos, permite salir normalmente
       };
       navigation.addListener('beforeRemove', onBeforeRemove);
       return () => navigation.removeListener('beforeRemove', onBeforeRemove);
-    }, [navigation, tabla, envases])
+    }, [navigation, tabla, envases, guardado])
   );
 
   // Función para verificar si un envase está completo
@@ -149,20 +192,17 @@ export default function EnvaseScreen() {
   // Cambiar la flecha de regresar para mostrar alerta si hay datos sin guardar
   const handleBack = () => {
     if (hayDatosIngresados()) {
-      Alert.alert(
-        'Atención',
-        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Salir', style: 'destructive', onPress: () => navigation.replace('Menu') }
-        ]
-      );
+      setOnConfirmSalir(() => () => {
+        setModalSinGuardar(false);
+        navigation.replace('Menu');
+      });
+      setModalSinGuardar(true);
     } else {
       navigation.replace('Menu');
     }
   };
 
-  // Guardar datos en la base de datos
+  // Guardar solo los envases con algún dato ingresado y campos vacíos como null
   const handleGuardar = async () => {
     if (!seccionSeleccionada || !seccionSeleccionada.Nombre) {
       Alert.alert('Error', 'No se ha seleccionado una sección.');
@@ -185,37 +225,52 @@ export default function EnvaseScreen() {
 
   const handleContinuar = () => {
     if (hayDatosIngresados()) {
-      Alert.alert(
-        'Atención',
-        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-        [
-          { text: 'OK', style: 'cancel' }
-        ]
-      );
+      setOnConfirmSalir(null);
+      setModalSinGuardar(true);
       return;
     }
     navigation.replace('Menu');
   };
 
-  // Función auxiliar para guardar los datos
+  // Guardar solo los envases con algún dato ingresado y campos vacíos como null
   const guardarEnvases = async (forzar: boolean) => {
     if (guardando) return false;
     setGuardando(true);
     try {
       const fechaHoy = new Date().toISOString().split('T')[0];
       for (const envase of envases) {
-        const data: any = {
-          caseta: envase, // El tipo de envase es la caseta
-          fecha: fechaHoy,
-          granja_id: (seccionSeleccionada as any)?.GranjaID ?? null,
-          tipo: envase,
-          inicial: Number(tabla[envase].existenciaInicial) || 0,
-          recibido: Number(tabla[envase].recibido) || 0,
-          consumo: Number(tabla[envase].consumo) || 0,
-          final: Number(tabla[envase].existenciaFinal) || 0,
-        };
-        await DatabaseQueries.insertEnvase(data);
+        const datos = tabla[envase];
+        // Solo guardar si hay algún dato ingresado
+        if (
+          datos.existenciaInicial !== '' ||
+          datos.recibido !== '' ||
+          datos.consumo !== ''
+        ) {
+          const data: any = {
+            caseta: envase,
+            fecha: fechaHoy,
+            granja_id: (seccionSeleccionada as any)?.GranjaID ?? null,
+            tipo: envase,
+            inicial: datos.existenciaInicial === '' ? null : Number(datos.existenciaInicial),
+            recibido: datos.recibido === '' ? null : Number(datos.recibido),
+            consumo: datos.consumo === '' ? null : Number(datos.consumo),
+            final: null, // El cálculo acumulado lo hace la DB
+          };
+          await DatabaseQueries.insertEnvase(data);
+        }
       }
+      // Recargar acumulado después de guardar
+      const datos = await DatabaseQueries.getEnvaseByFecha(fechaHoy, (seccionSeleccionada as any)?.GranjaID ?? null);
+      const acumulado: any = {};
+      datos.forEach((row: any) => {
+        acumulado[row.tipo] = {
+          existenciaInicial: row.inicial || 0,
+          recibido: row.recibido || 0,
+          consumo: row.consumo || 0,
+          existenciaFinal: row.final || 0,
+        };
+      });
+      setEnvaseAcumulado(acumulado);
       return true;
     } catch (error) {
       console.error('Error al guardar:', error);
@@ -369,6 +424,29 @@ export default function EnvaseScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <Modal isVisible={modalSinGuardar} onBackdropPress={() => setModalSinGuardar(false)}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 28, alignItems: 'center', minWidth: 260 }}>
+          <Ionicons name="alert-circle-outline" size={48} color="#e6b800" style={{ marginBottom: 12 }} />
+          <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 10, color: '#2a3a4b', textAlign: 'center' }}>¡Atención!</Text>
+          <Text style={{ color: '#666', fontSize: 15, marginBottom: 24, textAlign: 'center' }}>Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.</Text>
+          <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'center' }}>
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: '#e0e7ef', borderRadius: 8, padding: 14, alignItems: 'center', marginRight: onConfirmSalir ? 8 : 0 }}
+              onPress={() => setModalSinGuardar(false)}
+            >
+              <Text style={{ color: '#2a3a4b', fontWeight: 'bold', fontSize: 16 }}>Cancelar</Text>
+            </TouchableOpacity>
+            {onConfirmSalir && (
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#e53935', borderRadius: 8, padding: 14, alignItems: 'center', marginLeft: 8 }}
+                onPress={onConfirmSalir}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Salir</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

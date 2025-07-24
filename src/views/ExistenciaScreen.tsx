@@ -9,6 +9,7 @@ import { useSeccion } from './EnvaseScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useCasetas } from '../hooks/useCasetas';
 import { useGranjas } from '../hooks/useGranjas';
+import Modal from 'react-native-modal';
 
 const columnas = ['Existencia Inicial', 'Entrada', 'Mortalidad', 'Salida', 'Edad'];
 
@@ -74,27 +75,66 @@ export default function ExistenciaScreen() {
     });
   }, [casetas]);
 
-  // Calcular totales y existencia final
-  const totales = useMemo(() => {
-    let existenciaInicial = 0, entrada = 0, mortalidad = 0, salida = 0, existenciaFinal = 0;
-    casetasFiltradas.forEach(caseta => {
-      const nombre = typeof caseta === 'string' ? caseta : caseta.Nombre;
-      const datos = tabla[nombre] || { existenciaInicial: '', entrada: '', mortalidad: '', salida: '', edad: '', existenciaFinal: '0' };
-      const inicial = Number(datos.existenciaInicial) || 0;
-      const ent = Number(datos.entrada) || 0;
-      const mort = Number(datos.mortalidad) || 0;
-      const sal = Number(datos.salida) || 0;
-      const final = inicial + ent - mort - sal;
-      existenciaInicial += inicial;
-      entrada += ent;
-      mortalidad += mort;
-      salida += sal;
-      existenciaFinal += final;
-    });
-    return { existenciaInicial, entrada, mortalidad, salida, existenciaFinal };
-  }, [tabla, casetasFiltradas]);
+  // Estado para saber si los datos ya se guardaron
+  const [guardado, setGuardado] = useState(false);
+  // Estado para evitar doble guardado
+  const [guardando, setGuardando] = useState(false);
 
-  // Manejar cambios en la tabla
+  // 1. Agrega estado para mostrar el modal
+  const [modalSinGuardar, setModalSinGuardar] = useState(false);
+  const [onConfirmSalir, setOnConfirmSalir] = useState<null | (() => void)>(null);
+
+  // SIEMPRE inicializar los inputs vacíos al entrar
+  useEffect(() => {
+    if (!casetasFiltradas || !granjaId) return;
+    setGuardado(false);
+    setTabla(() => {
+      const obj: Record<string, CasetaExistencia> = {};
+      casetasFiltradas.forEach(caseta => {
+        obj[caseta.Nombre] = {
+          existenciaInicial: '',
+          entrada: '',
+          mortalidad: '',
+          salida: '',
+          edad: '',
+          existenciaFinal: '0',
+        };
+      });
+      return obj;
+    });
+  }, [casetasFiltradas.length, granjaId, fechaHoy]);
+
+  // Acumulado real de la base de datos para totales y validación
+  const [existenciaAcumulada, setExistenciaAcumulada] = useState<any[]>([]);
+  useEffect(() => {
+    if (!granjaId) return;
+    DatabaseQueries.getExistenciaByFecha(fechaHoy, granjaId).then(setExistenciaAcumulada);
+  }, [granjaId, fechaHoy, guardado]);
+
+  // Totales en tiempo real: suma del acumulado en base de datos + lo que está en los inputs
+  const totales = useMemo(() => {
+    let existenciaInicial = 0, entrada = 0, mortalidad = 0, salida = 0;
+    casetasFiltradas.forEach(caseta => {
+      const row = existenciaAcumulada.find((e: any) => e.caseta === caseta.Nombre) || {};
+      const baseInicial = Number(row.inicial) || 0;
+      const baseEntrada = Number(row.entrada) || 0;
+      const baseMortalidad = Number(row.mortalidad) || 0;
+      const baseSalida = Number(row.salida) || 0;
+      const inputInicial = Number(tabla[caseta.Nombre]?.existenciaInicial) || 0;
+      const inputEntrada = Number(tabla[caseta.Nombre]?.entrada) || 0;
+      const inputMortalidad = Number(tabla[caseta.Nombre]?.mortalidad) || 0;
+      const inputSalida = Number(tabla[caseta.Nombre]?.salida) || 0;
+      existenciaInicial += baseInicial + inputInicial;
+      entrada += baseEntrada + inputEntrada;
+      mortalidad += baseMortalidad + inputMortalidad;
+      salida += baseSalida + inputSalida;
+    });
+    const existenciaFinal = existenciaInicial + entrada - mortalidad - salida;
+    return { existenciaInicial, entrada, mortalidad, salida, existenciaFinal };
+  }, [existenciaAcumulada, casetasFiltradas, tabla]);
+
+  // Validación: alerta si ya hay datos guardados en cualquier caseta y se intenta registrar más
+  const [alertaCasetas, setAlertaCasetas] = useState<Record<string, boolean>>({});
   const handleChange = (caseta: string, campo: string, valor: string) => {
     setTabla((prev: any) => {
       const prevDatos = prev[caseta] || { existenciaInicial: '', entrada: '', mortalidad: '', salida: '', edad: '', existenciaFinal: '0' };
@@ -115,11 +155,6 @@ export default function ExistenciaScreen() {
     });
   };
 
-  // Estado para saber si los datos ya se guardaron
-  const [guardado, setGuardado] = useState(false);
-  // Estado para evitar doble guardado
-  const [guardando, setGuardando] = useState(false);
-
   // Función para saber si hay algún dato ingresado en cualquier input
   const hayDatosIngresados = () => {
     return casetasFiltradas.some(caseta => {
@@ -137,20 +172,16 @@ export default function ExistenciaScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // 2. Reemplaza Alert.alert por setModalSinGuardar(true) y setOnConfirmSalir(() => ...)
       const onBeforeRemove = (e: any) => {
-        if (guardado) {
-          // Permitir salir sin alerta si los datos acaban de guardarse
-          return;
-        }
+        if (guardado) return;
         if (hayDatosIngresados()) {
           e.preventDefault();
-          Alert.alert(
-            'Atención',
-            'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-            [
-              { text: 'OK', style: 'cancel' }
-            ]
-          );
+          setOnConfirmSalir(() => () => {
+            setModalSinGuardar(false);
+            navigation.dispatch(e.data.action);
+          });
+          setModalSinGuardar(true);
         }
         // Si no hay datos, permite salir normalmente
       };
@@ -176,14 +207,11 @@ export default function ExistenciaScreen() {
   // Cambiar la flecha de regresar para mostrar alerta si hay datos sin guardar
   const handleBack = () => {
     if (hayDatosIngresados()) {
-      Alert.alert(
-        'Atención',
-        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Salir', style: 'destructive', onPress: () => navigation.replace('Menu') }
-        ]
-      );
+      setOnConfirmSalir(() => () => {
+        setModalSinGuardar(false);
+        navigation.replace('Menu');
+      });
+      setModalSinGuardar(true);
     } else {
       navigation.replace('Menu');
     }
@@ -206,13 +234,8 @@ export default function ExistenciaScreen() {
 
   const handleContinuar = () => {
     if (hayDatosIngresados()) {
-      Alert.alert(
-        'Atención',
-        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-        [
-          { text: 'OK', style: 'cancel' }
-        ]
-      );
+      setOnConfirmSalir(null);
+      setModalSinGuardar(true);
       return;
     }
     navigation.replace('Menu');
@@ -231,8 +254,7 @@ export default function ExistenciaScreen() {
           tabla[nombre].entrada ||
           tabla[nombre].mortalidad ||
           tabla[nombre].salida ||
-          tabla[nombre].edad ||
-          tabla[nombre].existenciaFinal
+          tabla[nombre].edad
         ) {
           const data: any = {
             caseta: nombre,
@@ -243,7 +265,7 @@ export default function ExistenciaScreen() {
             mortalidad: Number(tabla[nombre].mortalidad) || 0,
             salida: Number(tabla[nombre].salida) || 0,
             edad: Number(tabla[nombre].edad) || 0,
-            final: Number(tabla[nombre].existenciaFinal) || 0,
+            final: null, // No enviar el total calculado, dejar que la suma la haga la base de datos
           };
           await DatabaseQueries.insertExistencia(data);
         }
@@ -270,26 +292,6 @@ export default function ExistenciaScreen() {
     }
     setCasetasAbiertas(prev => ({ ...prev, [caseta]: !prev[caseta] }));
   };
-
-  // useEffect para limpiar los inputs al entrar
-  useEffect(() => {
-    if (!casetasFiltradas || !granjaId) return;
-    setGuardado(false); // Reiniciar el estado de guardado al entrar
-    setTabla(() => {
-      const obj: Record<string, CasetaExistencia> = {};
-      casetasFiltradas.forEach(caseta => {
-        obj[caseta.Nombre] = {
-          existenciaInicial: '',
-          entrada: '',
-          mortalidad: '',
-          salida: '',
-          edad: '',
-          existenciaFinal: '0',
-        };
-      });
-      return obj;
-    });
-  }, [casetasFiltradas.length, granjaId, fechaHoy]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -431,6 +433,30 @@ export default function ExistenciaScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {/* 3. Agrega el modal al render */}
+      <Modal isVisible={modalSinGuardar} onBackdropPress={() => setModalSinGuardar(false)}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 28, alignItems: 'center', minWidth: 260 }}>
+          <Ionicons name="alert-circle-outline" size={48} color="#e6b800" style={{ marginBottom: 12 }} />
+          <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 10, color: '#2a3a4b', textAlign: 'center' }}>¡Atención!</Text>
+          <Text style={{ color: '#666', fontSize: 15, marginBottom: 24, textAlign: 'center' }}>Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.</Text>
+          <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'center' }}>
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: '#e0e7ef', borderRadius: 8, padding: 14, alignItems: 'center', marginRight: onConfirmSalir ? 8 : 0 }}
+              onPress={() => setModalSinGuardar(false)}
+            >
+              <Text style={{ color: '#2a3a4b', fontWeight: 'bold', fontSize: 16 }}>Cancelar</Text>
+            </TouchableOpacity>
+            {onConfirmSalir && (
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#e53935', borderRadius: 8, padding: 14, alignItems: 'center', marginLeft: 8 }}
+                onPress={onConfirmSalir}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Salir</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
