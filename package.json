@@ -6,20 +6,26 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build-web": "webpack --mode=production --config webpack.config.js",
+    "build-desktop": "npm run build-web && cd electron && npm install && npm run build-win",
+    "desktop": "cd electron && npm start",
+    "webpack": "webpack --mode=development --config webpack.config.js",
+    "webpack-prod": "webpack --mode=production --config webpack.config.js"
   },
   "dependencies": {
     "@react-native-community/datetimepicker": "^8.4.2",
     "@react-native-picker/picker": "^2.11.1",
     "@react-navigation/native": "^7.1.14",
     "@react-navigation/native-stack": "^7.3.21",
-    "expo": "~53.0.17",
+    "expo": "53.0.20",
     "expo-clipboard": "^7.1.5",
     "expo-print": "^14.1.4",
     "expo-sqlite": "~15.2.14",
     "expo-status-bar": "~2.2.3",
     "node-fetch": "^3.3.2",
     "react": "19.0.0",
+    "react-dom": "^19.0.0",
     "react-native": "0.79.5",
     "react-native-modal": "^14.0.0-rc.1",
     "react-native-paper": "^5.14.5",
@@ -27,6 +33,7 @@
     "react-native-screens": "~4.11.1",
     "react-native-signature-canvas": "^5.0.1",
     "react-native-vector-icons": "^10.2.0",
+    "react-native-web": "^0.20.0",
     "react-native-webview": "^13.15.0"
   },
   "devDependencies": {
