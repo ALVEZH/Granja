@@ -11,6 +11,34 @@ export class DatabaseQueries {
       console.error("No se pudo obtener la base de datos para insertProduccion:", e);
       return;
     }
+    // Buscar si ya existe un registro para la caseta, fecha y granja
+    const selectQuery = `SELECT * FROM produccion WHERE caseta = ? AND fecha = ? AND granja_id = ?`;
+    const existing = await db.getFirstAsync(selectQuery, [data.caseta, data.fecha, data.granja_id]);
+    let newData = { ...data };
+    if (existing) {
+      // Sumar los valores nuevos a los existentes
+      newData = {
+        ...data,
+        blanco_cajas: (existing.blanco_cajas || 0) + (data.blanco_cajas || 0),
+        blanco_restos: (existing.blanco_restos || 0) + (data.blanco_restos || 0),
+        roto1_cajas: (existing.roto1_cajas || 0) + (data.roto1_cajas || 0),
+        roto1_restos: (existing.roto1_restos || 0) + (data.roto1_restos || 0),
+        roto2_cajas: (existing.roto2_cajas || 0) + (data.roto2_cajas || 0),
+        roto2_restos: (existing.roto2_restos || 0) + (data.roto2_restos || 0),
+        manchado_cajas: (existing.manchado_cajas || 0) + (data.manchado_cajas || 0),
+        manchado_restos: (existing.manchado_restos || 0) + (data.manchado_restos || 0),
+        fragil1_cajas: (existing.fragil1_cajas || 0) + (data.fragil1_cajas || 0),
+        fragil1_restos: (existing.fragil1_restos || 0) + (data.fragil1_restos || 0),
+        fragil2_cajas: (existing.fragil2_cajas || 0) + (data.fragil2_cajas || 0),
+        fragil2_restos: (existing.fragil2_restos || 0) + (data.fragil2_restos || 0),
+        yema_cajas: (existing.yema_cajas || 0) + (data.yema_cajas || 0),
+        yema_restos: (existing.yema_restos || 0) + (data.yema_restos || 0),
+        b1_cajas: (existing.b1_cajas || 0) + (data.b1_cajas || 0),
+        b1_restos: (existing.b1_restos || 0) + (data.b1_restos || 0),
+        extra240_cajas: (existing.extra240_cajas || 0) + (data.extra240_cajas || 0),
+        extra240_restos: (existing.extra240_restos || 0) + (data.extra240_restos || 0),
+      };
+    }
     const query = `
       INSERT OR REPLACE INTO produccion (
         caseta, fecha, granja_id, blanco_cajas, blanco_restos, roto1_cajas, roto1_restos,
@@ -24,24 +52,24 @@ export class DatabaseQueries {
         data.caseta,
         data.fecha,
         data.granja_id,
-        data.blanco_cajas,
-        data.blanco_restos,
-        data.roto1_cajas,
-        data.roto1_restos,
-        data.roto2_cajas,
-        data.roto2_restos,
-        data.manchado_cajas,
-        data.manchado_restos,
-        data.fragil1_cajas,
-        data.fragil1_restos,
-        data.fragil2_cajas,
-        data.fragil2_restos,
-        data.yema_cajas,
-        data.yema_restos,
-        data.b1_cajas,
-        data.b1_restos,
-        data.extra240_cajas,
-        data.extra240_restos,
+        newData.blanco_cajas,
+        newData.blanco_restos,
+        newData.roto1_cajas,
+        newData.roto1_restos,
+        newData.roto2_cajas,
+        newData.roto2_restos,
+        newData.manchado_cajas,
+        newData.manchado_restos,
+        newData.fragil1_cajas,
+        newData.fragil1_restos,
+        newData.fragil2_cajas,
+        newData.fragil2_restos,
+        newData.yema_cajas,
+        newData.yema_restos,
+        newData.b1_cajas,
+        newData.b1_restos,
+        newData.extra240_cajas,
+        newData.extra240_restos,
       ])
     } catch (error) {
       console.error("Error al guardar producción:", error);
@@ -109,28 +137,19 @@ export class DatabaseQueries {
       console.error("No se pudo obtener la base de datos para insertAlimento:", e);
       return;
     }
-    
-    // Validar datos de entrada
-    if (!data) {
-      console.error("insertAlimento: datos nulos o indefinidos");
-      return;
+    // Buscar si ya existe un registro para la caseta, fecha y granja
+    const selectQuery = `SELECT * FROM alimento WHERE caseta = ? AND fecha = ? AND granja_id = ?`;
+    const existing = await db.getFirstAsync(selectQuery, [data.caseta, data.fecha, data.granja_id]);
+    let newData = { ...data };
+    if (existing) {
+      // Sumar los valores nuevos a los existentes
+      newData = {
+        ...data,
+        existencia_inicial: (existing.existencia_inicial || 0) + (data.existencia_inicial || 0),
+        entrada: (existing.entrada || 0) + (data.entrada || 0),
+        consumo: (existing.consumo || 0) + (data.consumo || 0),
+      };
     }
-    
-    if (!data.caseta || typeof data.caseta !== 'string') {
-      console.error("insertAlimento: caseta inválida:", data.caseta);
-      return;
-    }
-    
-    if (!data.fecha || typeof data.fecha !== 'string') {
-      console.error("insertAlimento: fecha inválida:", data.fecha);
-      return;
-    }
-    
-    if (data.granja_id === null || data.granja_id === undefined || isNaN(data.granja_id)) {
-      console.error("insertAlimento: granja_id inválido:", data.granja_id);
-      return;
-    }
-    
     try {
       // Verificar que la tabla existe
       const tableCheck = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table' AND name='alimento'");
@@ -138,39 +157,23 @@ export class DatabaseQueries {
         console.error("insertAlimento: La tabla 'alimento' no existe");
         return;
       }
-      
       const query = `
         INSERT OR REPLACE INTO alimento (
           caseta, fecha, granja_id, existencia_inicial, entrada, consumo, tipo, edad
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      
-      // Preparar valores con validación
       const valores = [
         data.caseta || '',
         data.fecha || '',
         data.granja_id || 0,
-        data.existencia_inicial || 0,
-        data.entrada || 0,
-        data.consumo || 0,
+        newData.existencia_inicial || 0,
+        newData.entrada || 0,
+        newData.consumo || 0,
         data.tipo || '',
         data.edad || '',
       ];
-      
-      console.log("insertAlimento: Insertando datos:", {
-        caseta: data.caseta,
-        fecha: data.fecha,
-        granja_id: data.granja_id,
-        existencia_inicial: data.existencia_inicial,
-        entrada: data.entrada,
-        consumo: data.consumo,
-        tipo: data.tipo,
-        edad: data.edad
-      });
-      
       await db.runAsync(query, valores);
       console.log("insertAlimento: Datos insertados correctamente");
-      
     } catch (error) {
       console.error("Error al guardar alimento:", error);
       console.error("Datos que causaron el error:", data);
@@ -252,6 +255,25 @@ export class DatabaseQueries {
       console.error("No se pudo obtener la base de datos para insertExistencia:", e);
       return;
     }
+    // Buscar si ya existe un registro para la caseta, fecha y granja
+    const selectQuery = `SELECT * FROM existencia WHERE caseta = ? AND fecha = ? AND granja_id = ?`;
+    const existing = await db.getFirstAsync(selectQuery, [data.caseta, data.fecha, data.granja_id]);
+    let newData = { ...data };
+    if (existing) {
+      newData = {
+        ...data,
+        inicial: (existing.inicial || 0) + (data.inicial || 0),
+        entrada: (existing.entrada || 0) + (data.entrada || 0),
+        mortalidad: (existing.mortalidad || 0) + (data.mortalidad || 0),
+        salida: (existing.salida || 0) + (data.salida || 0),
+        edad: (existing.edad || 0) + (data.edad || 0),
+        // Calcula el final acumulado
+        final: ((existing.inicial || 0) + (data.inicial || 0)) + ((existing.entrada || 0) + (data.entrada || 0)) - ((existing.mortalidad || 0) + (data.mortalidad || 0)) - ((existing.salida || 0) + (data.salida || 0)),
+      };
+    } else {
+      // Calcula el final para el primer registro
+      newData.final = (data.inicial || 0) + (data.entrada || 0) - (data.mortalidad || 0) - (data.salida || 0);
+    }
     const query = `
       INSERT OR REPLACE INTO existencia (
         caseta, fecha, granja_id, inicial, entrada, mortalidad, salida, edad, final
@@ -262,15 +284,16 @@ export class DatabaseQueries {
         data.caseta,
         data.fecha,
         data.granja_id,
-        data.inicial,
-        data.entrada,
-        data.mortalidad,
-        data.salida,
-        data.edad,
-        data.final,
+        newData.inicial,
+        newData.entrada,
+        newData.mortalidad,
+        newData.salida,
+        newData.edad,
+        newData.final,
       ])
     } catch (error) {
       console.error("Error al guardar existencia:", error);
+      throw error;
     }
   }
 
@@ -317,6 +340,23 @@ export class DatabaseQueries {
       console.error("No se pudo obtener la base de datos para insertEnvase:", e);
       return;
     }
+    // Buscar si ya existe un registro para el envase, fecha y granja
+    const selectQuery = `SELECT * FROM envase WHERE caseta = ? AND fecha = ? AND granja_id = ? AND tipo = ?`;
+    const existing = await db.getFirstAsync(selectQuery, [data.caseta, data.fecha, data.granja_id, data.tipo]);
+    let newData = { ...data };
+    if (existing) {
+      newData = {
+        ...data,
+        inicial: (existing.inicial || 0) + (data.inicial || 0),
+        recibido: (existing.recibido || 0) + (data.recibido || 0),
+        consumo: (existing.consumo || 0) + (data.consumo || 0),
+        // Calcula el final acumulado
+        final: ((existing.inicial || 0) + (data.inicial || 0)) + ((existing.recibido || 0) + (data.recibido || 0)) - ((existing.consumo || 0) + (data.consumo || 0)),
+      };
+    } else {
+      // Calcula el final para el primer registro
+      newData.final = (data.inicial || 0) + (data.recibido || 0) - (data.consumo || 0);
+    }
     const query = `
       INSERT OR REPLACE INTO envase (
         caseta, fecha, granja_id, tipo, inicial, recibido, consumo, final
@@ -328,10 +368,10 @@ export class DatabaseQueries {
         data.fecha,
         data.granja_id,
         data.tipo,
-        data.inicial,
-        data.recibido,
-        data.consumo,
-        data.final,
+        newData.inicial,
+        newData.recibido,
+        newData.consumo,
+        newData.final,
       ])
     } catch (error) {
       console.error("Error al guardar envase:", error);

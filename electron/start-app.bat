@@ -1,0 +1,6 @@
+@echo off
+echo Iniciando servidor web...
+start /B node server.js
+timeout /t 2 /nobreak > nul
+echo Iniciando aplicacion Electron...
+start electron . 

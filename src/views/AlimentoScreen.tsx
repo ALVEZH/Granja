@@ -10,6 +10,7 @@ import { useSeccion } from './EnvaseScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useCasetas } from '../hooks/useCasetas';
 import { useGranjas } from '../hooks/useGranjas';
+import Modal from 'react-native-modal';
 
 
 // Habilita LayoutAnimation en Android
@@ -43,11 +44,19 @@ export default function AlimentoScreen() {
   // Estructura: { [caseta]: { existenciaInicial, entrada, consumo, tipo } }
   const [tabla, setTabla] = useState<Record<string, CasetaAlimento>>({});
 
-  // Cargar datos existentes cuando cambian las casetas o la fecha
+  // Estado para saber si los datos ya se guardaron
+  const [guardado, setGuardado] = useState(false);
+  // Estado para evitar doble guardado
+  const [guardando, setGuardando] = useState(false);
+
+  // 1. Agrega estado para mostrar el modal
+  const [modalSinGuardar, setModalSinGuardar] = useState(false);
+  const [onConfirmSalir, setOnConfirmSalir] = useState<null | (() => void)>(null);
+
+  // SIEMPRE inicializar los inputs vacíos al entrar
   useEffect(() => {
     if (!casetasFiltradas || !granjaId) return;
-    setGuardado(false); // Reiniciar el estado de guardado al entrar
-    // SIEMPRE inicializar los inputs vacíos
+    setGuardado(false);
     setTabla(() => {
       const obj: Record<string, CasetaAlimento> = {};
       casetasFiltradas.forEach(caseta => {
@@ -62,23 +71,33 @@ export default function AlimentoScreen() {
     });
   }, [casetasFiltradas.length, granjaId, fechaHoy]);
 
-  // Calcular totales
+  // Acumulado real de la base de datos para totales y validación
+  const [alimentoAcumulado, setAlimentoAcumulado] = useState<any[]>([]);
+  useEffect(() => {
+    if (!granjaId) return;
+    DatabaseQueries.getAlimentoByFecha(fechaHoy, granjaId).then(setAlimentoAcumulado);
+  }, [granjaId, fechaHoy, guardado]);
+
+  // Totales en tiempo real: suma del acumulado en base de datos + lo que está en los inputs
   const totales = useMemo(() => {
     let existenciaInicial = 0, entrada = 0, consumo = 0;
-    
     casetasFiltradas.forEach(caseta => {
-      const datosCaseta = tabla[caseta.Nombre];
-      if (datosCaseta) {
-        existenciaInicial += Number(datosCaseta.existenciaInicial) || 0;
-        entrada += Number(datosCaseta.entrada) || 0;
-        consumo += Number(datosCaseta.consumo) || 0;
-      }
+      const row = alimentoAcumulado.find((a: any) => a.caseta === caseta.Nombre) || {};
+      const baseExistencia = Number(row.existencia_inicial) || 0;
+      const baseEntrada = Number(row.entrada) || 0;
+      const baseConsumo = Number(row.consumo) || 0;
+      const inputExistencia = Number(tabla[caseta.Nombre]?.existenciaInicial) || 0;
+      const inputEntrada = Number(tabla[caseta.Nombre]?.entrada) || 0;
+      const inputConsumo = Number(tabla[caseta.Nombre]?.consumo) || 0;
+      existenciaInicial += baseExistencia + inputExistencia;
+      entrada += baseEntrada + inputEntrada;
+      consumo += baseConsumo + inputConsumo;
     });
-    
     return { existenciaInicial, entrada, consumo };
-  }, [tabla, casetasFiltradas.length]);
+  }, [alimentoAcumulado, casetasFiltradas, tabla]);
 
-  // Manejar cambios en la tabla
+  // Validación: alerta si ya hay datos guardados en cualquier caseta y se intenta registrar más
+  const [alertaCasetas, setAlertaCasetas] = useState<Record<string, boolean>>({});
   const handleChange = (caseta: string, campo: 'existenciaInicial' | 'entrada' | 'consumo' | 'tipo', valor: string) => {
     setTabla((prev: typeof tabla) => ({
       ...prev,
@@ -113,11 +132,6 @@ export default function AlimentoScreen() {
     setCasetasAbiertas(prev => ({ ...prev, [caseta]: !prev[caseta] }));
   };
 
-  // Estado para saber si los datos ya se guardaron
-  const [guardado, setGuardado] = useState(false);
-  // Estado para evitar doble guardado
-  const [guardando, setGuardando] = useState(false);
-
   // Función para saber si hay algún dato ingresado en cualquier input
   const hayDatosIngresados = () => {
     return casetasFiltradas.some(caseta => {
@@ -134,21 +148,20 @@ export default function AlimentoScreen() {
   useFocusEffect(
     React.useCallback(() => {
       const onBeforeRemove = (e: any) => {
+        if (guardado) return;
         if (hayDatosIngresados()) {
           e.preventDefault();
-          Alert.alert(
-            'Atención',
-            'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-            [
-              { text: 'OK', style: 'cancel' }
-            ]
-          );
+          setOnConfirmSalir(() => () => {
+            setModalSinGuardar(false);
+            navigation.dispatch(e.data.action);
+          });
+          setModalSinGuardar(true);
         }
         // Si no hay datos, permite salir normalmente
       };
       navigation.addListener('beforeRemove', onBeforeRemove);
       return () => navigation.removeListener('beforeRemove', onBeforeRemove);
-    }, [navigation, tabla, casetasFiltradas])
+    }, [navigation, tabla, casetasFiltradas, guardado])
   );
 
   // Función para verificar si una caseta está completa
@@ -184,6 +197,10 @@ export default function AlimentoScreen() {
         return obj;
       });
       setGuardado(true);
+      // Recargar el acumulado después de guardar para que los totales reflejen la suma
+      if (granjaId) {
+        DatabaseQueries.getAlimentoByFecha(fechaHoy, granjaId).then(setAlimentoAcumulado);
+      }
       Alert.alert('Éxito', 'Datos de alimentos guardados correctamente.');
     }
     // NO navegar aquí
@@ -191,13 +208,8 @@ export default function AlimentoScreen() {
 
   const handleContinuar = () => {
     if (hayDatosIngresados()) {
-      Alert.alert(
-        'Atención',
-        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-        [
-          { text: 'OK', style: 'cancel' }
-        ]
-      );
+      setOnConfirmSalir(null);
+      setModalSinGuardar(true);
       return;
     }
     navigation.replace('Menu');
@@ -238,14 +250,11 @@ export default function AlimentoScreen() {
   // Cambiar la flecha de regresar para mostrar alerta si hay datos sin guardar
   const handleBack = () => {
     if (hayDatosIngresados()) {
-      Alert.alert(
-        'Atención',
-        'Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Salir', style: 'destructive', onPress: () => navigation.replace('Menu') }
-        ]
-      );
+      setOnConfirmSalir(() => () => {
+        setModalSinGuardar(false);
+        navigation.replace('Menu');
+      });
+      setModalSinGuardar(true);
     } else {
       navigation.replace('Menu');
     }
@@ -362,6 +371,29 @@ export default function AlimentoScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <Modal isVisible={modalSinGuardar} onBackdropPress={() => setModalSinGuardar(false)}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 28, alignItems: 'center', minWidth: 260 }}>
+          <Ionicons name="alert-circle-outline" size={48} color="#e6b800" style={{ marginBottom: 12 }} />
+          <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 10, color: '#2a3a4b', textAlign: 'center' }}>¡Atención!</Text>
+          <Text style={{ color: '#666', fontSize: 15, marginBottom: 24, textAlign: 'center' }}>Tienes datos sin guardar. Borra todos los datos o guarda los datos para poder salir.</Text>
+          <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'center' }}>
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: '#e0e7ef', borderRadius: 8, padding: 14, alignItems: 'center', marginRight: onConfirmSalir ? 8 : 0 }}
+              onPress={() => setModalSinGuardar(false)}
+            >
+              <Text style={{ color: '#2a3a4b', fontWeight: 'bold', fontSize: 16 }}>Cancelar</Text>
+            </TouchableOpacity>
+            {onConfirmSalir && (
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#e53935', borderRadius: 8, padding: 14, alignItems: 'center', marginLeft: 8 }}
+                onPress={onConfirmSalir}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Salir</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

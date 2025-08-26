@@ -35,20 +35,21 @@ export const useExistenciaSync = () => {
             GranjaID: Number(registro.granja_id),
             CasetaID: caseta,
             Fecha: fechaFormateada,
-            Inicial: parseFloat(String(registro.inicial || 0)),
+            ExistenciaInicial: parseFloat(String(registro.inicial || 0)),
             Entrada: parseFloat(String(registro.entrada || 0)),
             Mortalidad: parseFloat(String(registro.mortalidad || 0)),
             Salida: parseFloat(String(registro.salida || 0)),
             Edad: parseFloat(String(registro.edad || 0)),
-            Final: parseFloat(String(registro.final || 0))
+            ExistenciaFinal: parseFloat(String(registro.final || 0)),
+            CreadoPor: 'APP'
           };
 
           // Solo insertar si hay datos válidos
-          if (datosParaServidor.Inicial > 0 || 
+          if (datosParaServidor.ExistenciaInicial > 0 || 
               datosParaServidor.Entrada > 0 || 
               datosParaServidor.Mortalidad > 0 ||
               datosParaServidor.Salida > 0 ||
-              datosParaServidor.Final > 0) {
+              datosParaServidor.ExistenciaFinal > 0) {
             
             console.log(`🔄 Enviando: Caseta ${caseta} - Existencia`);
             console.log('📤 Datos:', datosParaServidor);

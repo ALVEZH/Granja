@@ -1,0 +1,39 @@
+{
+  "name": "granja-desktop",
+  "version": "1.0.0",
+  "description": "Aplicación de Granja para Windows Server",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "dist": "npm run build && electron-builder --win --publish=never"
+  },
+  "build": {
+    "appId": "com.granja.desktop",
+    "productName": "Granja App",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "web-build/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.png",
+      "sign": false
+    },
+    "forceCodeSigning": false
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.7",
+    "express": "^5.1.0"
+  }
+}

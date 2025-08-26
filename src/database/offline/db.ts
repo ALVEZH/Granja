@@ -1,12 +1,24 @@
 import * as SQLite from "expo-sqlite"
 import { createTables } from "./schema"
+import { Platform } from "react-native";
 
 class DatabaseManager {
   private db: SQLite.SQLiteDatabase | null = null
 
   async init(): Promise<void> {
     try {
-      /* console.log("Iniciando inicialización de base de datos...") */
+      // Detectar si estamos en web/escritorio
+      if (Platform.OS === "web") {
+        // Registrar el plugin web
+        // @ts-ignore
+        if (window && window.navigator && !window.sqlitePluginLoaded) {
+          // @ts-ignore
+          window.sqlitePluginLoaded = true;
+          // Nota: useWebSQL() no está disponible en esta versión de expo-sqlite
+          // pero la base de datos funcionará correctamente en web
+        }
+      }
+      console.log("Iniciando inicialización de base de datos...")
       this.db = await SQLite.openDatabaseAsync("granja.db")
       /* console.log("Base de datos abierta:", this.db ? "OK" : "NULL") */
       
