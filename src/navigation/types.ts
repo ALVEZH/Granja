@@ -7,4 +7,6 @@ export type RootStackParamList = {
   Envase: undefined;
   ResumenSeccion: undefined;  // Aquí también la agregas
   SeleccionSeccion: undefined;
+  SilosScreen: undefined;
+  AsignacionesScreen: undefined;
 };

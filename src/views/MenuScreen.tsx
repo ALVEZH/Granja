@@ -155,6 +155,30 @@ export default function MenuScreen() {
           {completado.Envase && <Ionicons name="checkmark-circle" size={24} color="limegreen" style={styles.checkIcon} />}
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.listButton}
+          onPress={() => navigation.navigate('SilosScreen')}
+        >
+          <Image
+            source={require('../../assets/Iconos/silos.png')} // 👈 crea o usa un ícono
+            style={styles.icon}
+            resizeMode="contain"
+          />
+          <Text style={styles.label}>Silos</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.listButton}
+          onPress={() => navigation.navigate('AsignacionesScreen')}
+        >
+          <Image
+            source={require('../../assets/Iconos/asignar.png')} // 👈 crea o usa un ícono
+            style={styles.icon}
+            resizeMode="contain"
+          />
+          <Text style={styles.label}>Asignaciones</Text>
+        </TouchableOpacity>
+
         {/* BOTÓN PARA LA VISTA RESUMEN */}
         <TouchableOpacity
           style={styles.listButton}
