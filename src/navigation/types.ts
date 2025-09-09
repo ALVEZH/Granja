@@ -9,4 +9,6 @@ export type RootStackParamList = {
   SeleccionSeccion: undefined;
   SilosScreen: undefined;
   AsignacionesScreen: undefined;
+  TransferenciasScreen: undefined;
+  LotesScreen: undefined;
 };

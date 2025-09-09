@@ -179,6 +179,30 @@ export default function MenuScreen() {
           <Text style={styles.label}>Asignaciones</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.listButton}
+          onPress={() => navigation.navigate('TransferenciasScreen')}
+        >
+          <Image
+            source={require('../../assets/Iconos/transfer.png')} // 👈 crea o usa un ícono
+            style={styles.icon}
+            resizeMode="contain"
+          />
+          <Text style={styles.label}>Transferencias</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.listButton}
+          onPress={() => navigation.navigate('LotesScreen')}
+        >
+          <Image
+            source={require('../../assets/Iconos/lotes.png')} // 👈 crea o usa un ícono
+            style={styles.icon}
+            resizeMode="contain"
+          />
+          <Text style={styles.label}>Lotes</Text>
+        </TouchableOpacity>
+
         {/* BOTÓN PARA LA VISTA RESUMEN */}
         <TouchableOpacity
           style={styles.listButton}
