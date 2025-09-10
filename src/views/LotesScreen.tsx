@@ -1,6 +1,6 @@
 // src/screens/LotesScreen.tsx
-import React, { useState } from "react";
-import { SafeAreaView, View, Text, FlatList, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import React, { useState, useLayoutEffect } from "react";
+import { SafeAreaView, View, Text, FlatList, StyleSheet, ScrollView,Image, TouchableOpacity } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -24,8 +24,24 @@ const LotesScreen: React.FC = () => {
     return (!granjaFilter || silo?.GranjaID === granjaFilter) &&
            (!siloFilter || l.SiloID === siloFilter);
   });
-
-  const handleBack = () => navigation.replace("Menu");
+useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Image
+            source={require("../../assets/Iconos/lo.png")}
+            style={{ width: 32, height: 32, marginRight: 8 }}
+            resizeMode="contain"
+          />
+          <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 18 }}>
+            Lotes
+          </Text>
+        </View>
+      ),
+      
+    });
+  }, [navigation]);
+  const handleBack = () => navigation.replace("Menu" );
 
   const renderItem = ({ item }: { item: Lote }) => {
     const silo = silos.find(s => s.SiloID === item.SiloID);
@@ -65,53 +81,43 @@ const LotesScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <Ionicons name="arrow-back" size={28} color="#333" onPress={handleBack} style={styles.backButton} />
-        <Text style={styles.headerTitle}>LOTES DE SILOS</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {/* Filtros */}
       <ScrollView
-  horizontal
-  style={styles.filtros}
-  showsHorizontalScrollIndicator={false}
-  contentContainerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 }}
->
-  <View style={styles.pickerContainer}>
-    <Text style={styles.filterLabel}>Granja:</Text>
-    <Picker
-      selectedValue={granjaFilter}
-      onValueChange={setGranjaFilter}
-      style={styles.picker}
-    >
-      <Picker.Item label="Todas" value={null} />
-      {granjas.map(g => (
-        <Picker.Item key={g.GranjaID} label={g.Nombre} value={g.GranjaID} />
-      ))}
-    </Picker>
-  </View>
+        horizontal
+        style={styles.filtros}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 }}
+      >
+        <View style={styles.pickerContainer}>
+          <Text style={styles.filterLabel}>Granja:</Text>
+          <Picker
+            selectedValue={granjaFilter}
+            onValueChange={setGranjaFilter}
+            style={styles.picker}
+          >
+            <Picker.Item label="Todas" value={null} />
+            {granjas.map(g => (
+              <Picker.Item key={g.GranjaID} label={g.Nombre} value={g.GranjaID} />
+            ))}
+          </Picker>
+        </View>
 
-  <View style={styles.pickerContainer}>
-    <Text style={styles.filterLabel}>Silo:</Text>
-    <Picker
-      selectedValue={siloFilter}
-      onValueChange={setSiloFilter}
-      style={styles.picker}
-    >
-      <Picker.Item label="Todos" value={null} />
-      {silos
-        .filter(s => !granjaFilter || s.GranjaID === granjaFilter)
-        .map(s => (
-          <Picker.Item key={s.SiloID} label={s.Nombre} value={s.SiloID} />
-        ))}
-    </Picker>
-  </View>
-</ScrollView>
+        <View style={styles.pickerContainer}>
+          <Text style={styles.filterLabel}>Silo:</Text>
+          <Picker
+            selectedValue={siloFilter}
+            onValueChange={setSiloFilter}
+            style={styles.picker}
+          >
+            <Picker.Item label="Todos" value={null} />
+            {silos
+              .filter(s => !granjaFilter || s.GranjaID === granjaFilter)
+              .map(s => (
+                <Picker.Item key={s.SiloID} label={s.Nombre} value={s.SiloID} />
+              ))}
+          </Picker>
+        </View>
+      </ScrollView>
 
-
-      {/* Lista de lotes */}
       <FlatList
         data={filteredLotes}
         keyExtractor={(item) => item.LoteID.toString()}
@@ -133,11 +139,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 10,
-    marginTop: 20,
-    marginBottom: 10,
+    
   },
-  headerTitle: { fontSize: 26, fontWeight: "bold", color: "#2a3a4b", textAlign: "center", flex: 1 },
   backButton: { padding: 6, width: 40, alignItems: "flex-start", justifyContent: "center" },
   filtros: { paddingVertical: 10, paddingHorizontal: 16, backgroundColor: "#fff" },
   pickerContainer: {

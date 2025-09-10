@@ -212,7 +212,7 @@ export default function AlimentoScreen() {
       setModalSinGuardar(true);
       return;
     }
-    navigation.replace('Menu');
+    navigation.replace("Menu" );
   };
 
   // Función auxiliar para guardar los datos
@@ -252,11 +252,13 @@ export default function AlimentoScreen() {
     if (hayDatosIngresados()) {
       setOnConfirmSalir(() => () => {
         setModalSinGuardar(false);
-        navigation.replace('Menu');
+        navigation.replace("Menu" );
+
       });
       setModalSinGuardar(true);
     } else {
-      navigation.replace('Menu');
+      navigation.replace("Menu" );
+
     }
   };
 

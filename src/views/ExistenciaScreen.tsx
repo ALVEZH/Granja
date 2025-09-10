@@ -209,11 +209,11 @@ export default function ExistenciaScreen() {
     if (hayDatosIngresados()) {
       setOnConfirmSalir(() => () => {
         setModalSinGuardar(false);
-        navigation.replace('Menu');
+        navigation.replace("Menu" );
       });
       setModalSinGuardar(true);
     } else {
-      navigation.replace('Menu');
+      navigation.replace("Menu" );
     }
   };
 
@@ -242,7 +242,7 @@ export default function ExistenciaScreen() {
       setModalSinGuardar(true);
       return;
     }
-    navigation.replace('Menu');
+    navigation.replace("Menu" );
   };
 
   // Función auxiliar para guardar los datos

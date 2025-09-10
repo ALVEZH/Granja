@@ -194,11 +194,11 @@ export default function EnvaseScreen() {
     if (hayDatosIngresados()) {
       setOnConfirmSalir(() => () => {
         setModalSinGuardar(false);
-        navigation.replace('Menu');
+        navigation.replace("Menu" );
       });
       setModalSinGuardar(true);
     } else {
-      navigation.replace('Menu');
+      navigation.replace("Menu" );
     }
   };
 
@@ -245,7 +245,7 @@ export default function EnvaseScreen() {
       setModalSinGuardar(true);
       return;
     }
-    navigation.replace('Menu');
+    navigation.replace("Menu" );
   };
 
   // Guardar solo los envases con algún dato ingresado y campos vacíos como null

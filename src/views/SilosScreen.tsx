@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback,useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -44,7 +44,7 @@ const SilosScreen: React.FC = () => {
   };
 
   const handleBack = () => {
-    navigation.replace("Menu");
+    navigation.replace("Menu" );
   };
 
   const handleAdd = () => {
@@ -55,6 +55,28 @@ const SilosScreen: React.FC = () => {
     setGranjaID(null);
     setModalVisible(true);
   };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Image
+            source={require("../../assets/Iconos/silos.png")}
+            style={{ width: 32, height: 32, marginRight: 8 }}
+            resizeMode="contain"
+          />
+          <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 18 }}>
+            Silos
+          </Text>
+        </View>
+      ),
+      headerRight: () => (
+        <TouchableOpacity onPress={handleAdd} style={{ marginRight: 16 }}>
+          <Ionicons name="add-circle-outline" size={28} color="#fff" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   const handleEdit = (silo: Silo) => {
     setEditingSilo(silo);
@@ -124,17 +146,14 @@ const SilosScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Ionicons name="arrow-back" size={28} color="#333" />
-        </TouchableOpacity>
+      {/* <View style={styles.headerRow}>
 
         <Text style={styles.headerTitle}>SILOS</Text>
 
         <TouchableOpacity onPress={handleAdd} style={{ width: 40, alignItems: "flex-end" }}>
           <Ionicons name="add-circle-outline" size={28} color="#007AFF" />
         </TouchableOpacity>
-      </View>
+      </View> */}
 
       <KeyboardAvoidingView
         style={styles.keyboard}
@@ -145,7 +164,7 @@ const SilosScreen: React.FC = () => {
           keyExtractor={(item) => item.SiloID.toString()}
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListHeaderComponent={
+          /* ListHeaderComponent={
           <View style={styles.headerContainer}>
             <Image
               source={require("../../assets/Iconos/silos.png")} 
@@ -153,7 +172,7 @@ const SilosScreen: React.FC = () => {
               resizeMode="contain"
             />
           </View>
-        }
+        } */
           ListEmptyComponent={
             <Text style={{ textAlign: "center", marginTop: 20 }}>No hay silos registrados.</Text>
           }
@@ -277,6 +296,6 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8, marginBottom: 12 },
   modalButton: { backgroundColor: "#007AFF", padding: 12, borderRadius: 8, flex: 1, marginHorizontal: 4 },
   modalButtonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
-  headerContainer: { alignItems: 'center', marginTop: 30, marginBottom: 10 },
+  headerContainer: { alignItems: 'center', marginBottom: 10 },
   headerImage: { width: 48, height: 48, marginRight: 10 },
 });

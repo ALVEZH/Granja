@@ -66,7 +66,7 @@ export default function MenuScreen() {
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.replace('SeleccionSeccion')}
+          onPress={() => navigation.replace( "SeleccionSeccion" )}
         >
           <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>
@@ -155,53 +155,7 @@ export default function MenuScreen() {
           {completado.Envase && <Ionicons name="checkmark-circle" size={24} color="limegreen" style={styles.checkIcon} />}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.listButton}
-          onPress={() => navigation.navigate('SilosScreen')}
-        >
-          <Image
-            source={require('../../assets/Iconos/silos.png')} // 👈 crea o usa un ícono
-            style={styles.icon}
-            resizeMode="contain"
-          />
-          <Text style={styles.label}>Silos</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.listButton}
-          onPress={() => navigation.navigate('AsignacionesScreen')}
-        >
-          <Image
-            source={require('../../assets/Iconos/asignar.png')} // 👈 crea o usa un ícono
-            style={styles.icon}
-            resizeMode="contain"
-          />
-          <Text style={styles.label}>Asignaciones</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.listButton}
-          onPress={() => navigation.navigate('TransferenciasScreen')}
-        >
-          <Image
-            source={require('../../assets/Iconos/transfer.png')} // 👈 crea o usa un ícono
-            style={styles.icon}
-            resizeMode="contain"
-          />
-          <Text style={styles.label}>Transferencias</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.listButton}
-          onPress={() => navigation.navigate('LotesScreen')}
-        >
-          <Image
-            source={require('../../assets/Iconos/lotes.png')} // 👈 crea o usa un ícono
-            style={styles.icon}
-            resizeMode="contain"
-          />
-          <Text style={styles.label}>Lotes</Text>
-        </TouchableOpacity>
+        
 
         {/* BOTÓN PARA LA VISTA RESUMEN */}
         <TouchableOpacity

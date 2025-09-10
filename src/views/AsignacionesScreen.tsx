@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useLayoutEffect } from "react";
 import {
   SafeAreaView,
   View,
@@ -54,7 +54,8 @@ const AsignacionesScreen: React.FC = () => {
   const [notas, setNotas] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const handleBack = () => navigation.replace("Menu");
+  const handleBack = () => navigation.replace("Menu" );
+
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -72,6 +73,28 @@ const AsignacionesScreen: React.FC = () => {
     setNotas("");
     setModalVisible(true);
   };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Image
+            source={require("../../assets/Iconos/asignar.png")}
+            style={{ width: 32, height: 32, marginRight: 8 }}
+            resizeMode="contain"
+          />
+          <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 18 }}>
+            Asignaciones
+          </Text>
+        </View>
+      ),
+      headerRight: () => (
+        <TouchableOpacity onPress={handleAdd} style={{ marginRight: 16 }}>
+          <Ionicons name="add-circle-outline" size={28} color="#fff" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   const handleSave = async () => {
     if (!fecha || !granjaID || !casetaID || !tipoAlimento) {
@@ -128,8 +151,8 @@ const AsignacionesScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
-      <View style={styles.headerRow}>
+      
+      {/* <View style={styles.headerRow}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>
@@ -137,7 +160,7 @@ const AsignacionesScreen: React.FC = () => {
         <TouchableOpacity onPress={handleAdd} style={{ width: 40, alignItems: "flex-end" }}>
           <Ionicons name="add-circle-outline" size={28} color="#007AFF" />
         </TouchableOpacity>
-      </View>
+      </View> */}
 
       {/* Lista */}
       <KeyboardAvoidingView
@@ -149,7 +172,7 @@ const AsignacionesScreen: React.FC = () => {
           keyExtractor={(item) => item.AsignacionID.toString()}
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListHeaderComponent={
+          /* ListHeaderComponent={
             <View style={styles.headerContainer}>
               <Image
                 source={require("../../assets/Iconos/asignar.png")}
@@ -157,7 +180,7 @@ const AsignacionesScreen: React.FC = () => {
                 resizeMode="contain"
               />
             </View>
-          }
+          } */
           ListEmptyComponent={
             <Text style={{ textAlign: "center", marginTop: 20 }}>
               No hay asignaciones registradas.
@@ -305,6 +328,6 @@ const styles = StyleSheet.create({
   dateInput: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10, marginBottom: 10 },
   modalButtons: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
   modalButton: { flex: 1, backgroundColor: "#007AFF", padding: 10, marginHorizontal: 5, borderRadius: 8, alignItems: "center" },
-  headerContainer: { alignItems: 'center', marginTop: 30, marginBottom: 10 },
+  headerContainer: { alignItems: 'center', marginBottom: 10 },
   headerImage: { width: 48, height: 48, marginRight: 10 },
 });

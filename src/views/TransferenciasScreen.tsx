@@ -1,5 +1,5 @@
 // src/screens/TransferenciasScreen.tsx
-import React, { useState } from "react";
+import React, { useState ,useLayoutEffect } from "react";
 import {
   SafeAreaView,
   View,
@@ -48,7 +48,7 @@ const TransferenciasScreen: React.FC = () => {
   const [observaciones, setObservaciones] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const handleBack = () => navigation.replace("Menu");
+  const handleBack = () => navigation.replace("Menu" );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -70,6 +70,28 @@ const TransferenciasScreen: React.FC = () => {
     setObservaciones("");
     setModalVisible(true);
   };
+
+  useLayoutEffect(() => {
+      navigation.setOptions({
+        headerTitle: () => (
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Image
+              source={require("../../assets/Iconos/transfer.png")}
+              style={{ width: 32, height: 32, marginRight: 8 }}
+              resizeMode="contain"
+            />
+            <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 18 }}>
+              Transferencias
+            </Text>
+          </View>
+        ),
+        headerRight: () => (
+          <TouchableOpacity onPress={handleAdd} style={{ marginRight: 16 }}>
+            <Ionicons name="add-circle-outline" size={28} color="#fff" />
+          </TouchableOpacity>
+        ),
+      });
+    }, [navigation]);
 
   const handleSave = async () => {
     if (!granjaOrigenID || !siloOrigenID || !granjaDestinoID || !siloDestinoID || !cantidadKg || !estatus) {
@@ -124,15 +146,7 @@ const TransferenciasScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Ionicons name="arrow-back" size={28} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>TRANSFERENCIAS</Text>
-        <TouchableOpacity onPress={handleAdd} style={{ width: 40, alignItems: "flex-end" }}>
-          <Ionicons name="add-circle-outline" size={28} color="#007AFF" />
-        </TouchableOpacity>
-      </View>
+      
 
       {/* Lista */}
       <KeyboardAvoidingView
@@ -144,7 +158,7 @@ const TransferenciasScreen: React.FC = () => {
           keyExtractor={(item) => item.TransferenciaID.toString()}
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListHeaderComponent={
+          /* ListHeaderComponent={
             <View style={styles.headerContainer}>
               <Image
                 source={require("../../assets/Iconos/transfer.png")}
@@ -152,7 +166,7 @@ const TransferenciasScreen: React.FC = () => {
                 resizeMode="contain"
               />
             </View>
-          }
+          } */
           ListEmptyComponent={
             <Text style={{ textAlign: "center", marginTop: 20 }}>
               No hay transferencias registradas.
@@ -356,6 +370,6 @@ const styles = StyleSheet.create({
   dateInput: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10, marginBottom: 10 },
   modalButtons: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
   modalButton: { flex: 1, backgroundColor: "#007AFF", padding: 10, marginHorizontal: 5, borderRadius: 8, alignItems: "center" },
-  headerContainer: { alignItems: 'center', marginTop: 30, marginBottom: 10 },
+  headerContainer: { alignItems: 'center', marginBottom: 10 },
   headerImage: { width: 48, height: 48, marginRight: 10 },
 });

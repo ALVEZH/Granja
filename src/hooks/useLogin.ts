@@ -14,7 +14,7 @@ export const useLogin = () => {
         operacion: "consultar",
         data: {
           where: {
-            Estatus: "Activo"
+            
           }
         }
       });
@@ -22,6 +22,7 @@ export const useLogin = () => {
       // Buscar el usuario que tenga tanto el correo como la contraseña en el mismo registro
       const usuario = resultado.find(
         (u: any) =>
+          (u.Rol === "admin" || u.Rol === "user") &&
           u.Correo === email.trim() &&
           u.PasswordHash === password.trim()
       );

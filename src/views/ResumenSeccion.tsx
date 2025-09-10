@@ -771,7 +771,7 @@ export default function ResumenSeccion() {
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.replace('Menu')}
+            onPress={() => navigation.replace("MainApp", { screen: "Menu" })}
           >
             <Ionicons name="arrow-back" size={28} color="#333" />
           </TouchableOpacity>

@@ -1,4 +1,5 @@
 // App.js (modificado)
+import "react-native-gesture-handler";  
 import React, { useEffect } from 'react';
 import AppNavigator from './src/navigation/navigation';
 import { dbManager } from './src/database/offline/db'; // Ajusta la ruta según tu estructura

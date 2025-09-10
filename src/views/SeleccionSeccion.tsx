@@ -20,7 +20,7 @@ export default function SeleccionSeccion() {
   // Al seleccionar una sección (granja), guardar el objeto completo en el contexto y navegar al menú
   const handleSeleccion = (granja: Granja) => {
     setSeccionSeleccionada(granja);
-    navigation.navigate('Menu');
+    navigation.replace("Menu" );
   };
 
   // Lógica de cierre de sesión

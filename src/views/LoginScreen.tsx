@@ -44,34 +44,48 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      mostrarAlerta('error', 'Completa todos los campos para continuar.');
+  if (!email.trim() || !password.trim()) {
+    mostrarAlerta('error', 'Completa todos los campos para continuar.');
+    return;
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    mostrarAlerta('error', 'El formato del correo electrónico es incorrecto.');
+    return;
+  }
+
+  if (password.length < 3) {
+    mostrarAlerta('error', 'La contraseña debe tener al menos 6 caracteres.');
+    return;
+  }
+
+  try {
+    const usuario = await login(email, password);
+
+    if (!usuario) {
+      mostrarAlerta('error', 'Correo o contraseña incorrectos.');
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      mostrarAlerta('error', 'El formato del correo electrónico es incorrecto.');
-      return;
+    // Redirigir según rol
+    if (usuario.Rol === 'admin') {
+      // Usuario admin: abre menú hamburguesa
+      mostrarAlerta('exito', 'Bienvenido, administrador.', () =>
+        navigation.replace('MainApp', { screen: 'LotesScreen' }) // pantalla inicial admin
+      );
+    } else {
+      // Usuario normal: abre stack normal
+      mostrarAlerta('exito', 'Bienvenido.', () =>
+        navigation.replace('SeleccionSeccion')
+      );
     }
 
-    if (password.length < 3) {
-      mostrarAlerta('error', 'La contraseña debe tener al menos 6 caracteres.');
-      return;
-    }
+  } catch (error) {
+    mostrarAlerta('error', 'No se pudo validar el usuario. Intenta más tarde.');
+  }
+};
 
-    try {
-      const usuario = await login(email, password);
-
-      if (usuario) {
-        mostrarAlerta('exito', 'Inicio de sesión exitoso.', () => navigation.replace('SeleccionSeccion'));
-      } else {
-        mostrarAlerta('error', 'Correo o contraseña incorrectos.');
-      }
-    } catch (error) {
-      mostrarAlerta('error', 'No se pudo validar el usuario. Intenta más tarde.');
-    }
-  };
 
   
   return (
