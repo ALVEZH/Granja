@@ -48,11 +48,11 @@ export const fetchFromDynamicApi = async ({
   }
 
   console.log('🌐 Enviando a API:', {
-    url: 'http://192.168.5.103:3000/dynamic/execute',
+    url: 'http://192.168.68.103:3000/dynamic/execute',
     payload: payload
   });
 
-  const response = await fetch('http://192.168.5.103:3000/dynamic/execute', {
+  const response = await fetch('http://192.168.68.103:3000/dynamic/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)

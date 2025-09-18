@@ -46,8 +46,30 @@ export const useAlimentoSync = () => {
             continue;
           }
 
-          // Buscar lotes válidos para este alimento y granja
-          const lotesValidos = lotes.filter(lote => {
+        // 1. Insertar en ALVEZH_alimentos (registro de consumo total)
+        await fetchFromDynamicApi({
+          metodo: 'ALVEZH_alimentos',
+          tipo: 'tabla',
+          operacion: 'insertar',
+          data: {
+            GranjaID: granjaId,
+            CasetaID: caseta,
+            Fecha: fechaFormateada,
+            ExistenciaInicial: parseFloat(String(registro.existencia_inicial || 0)),
+            Entrada: parseFloat(String(registro.entrada || 0)),
+            Consumo: consumo,
+            Tipo: tipo,
+            CreadoPor: 'APP'
+          },
+        });
+
+        // 2. Descontar el consumo por FIFO en múltiples lotes
+        // 🔹 2. Descontar el consumo por FIFO en múltiples lotes del tipo de alimento
+        let restante = consumo;
+
+        // Solo tomamos lotes con cantidad disponible > 0
+        const lotesValidos = lotes
+          .filter(lote => {
             const silo = silos.find(s => s.SiloID === lote.SiloID);
             return (
               silo &&
@@ -55,47 +77,111 @@ export const useAlimentoSync = () => {
               lote.TipoAlimento === tipo &&
               lote.CantidadDisponibleKg > 0
             );
-          });
+          })
+          .sort((a, b) => new Date(a.FechaEntrada).getTime() - new Date(b.FechaEntrada).getTime());
 
-          // FIFO: el más antiguo
-          const lote = lotesValidos.sort(
-            (a, b) => new Date(a.FechaEntrada).getTime() - new Date(b.FechaEntrada).getTime()
-          )[0];
+        if (lotesValidos.length === 0) {
+          errores.push(`No se encontró lote válido para Granja ${granjaId}, Tipo ${tipo}`);
+          fallidos++;
+          continue;
+        }
 
-          if (!lote) {
-            errores.push(`No se encontró lote válido para Granja ${granjaId}, Tipo ${tipo}`);
-            fallidos++;
-            continue;
+        for (const lote of lotesValidos) {
+          if (restante <= 0) break;
+
+          let disponible = lote.CantidadDisponibleKg; // 🔹 usar variable local para evitar errores de doble descuento
+
+          if (disponible >= restante) {
+            const nuevaCantidad = disponible - restante;
+
+            await fetchFromDynamicApi({
+              metodo: 'LotesAlimento',
+              tipo: 'tabla',
+              operacion: 'actualizar',
+              data: {
+                LoteID: lote.LoteID,
+                CantidadDisponibleKg: nuevaCantidad,
+              },
+            });
+
+            lote.CantidadDisponibleKg = nuevaCantidad; // 🔹 actualizar en memoria
+            restante = 0;
+          } else {
+            restante -= disponible;
+
+            await fetchFromDynamicApi({
+              metodo: 'LotesAlimento',
+              tipo: 'tabla',
+              operacion: 'actualizar',
+              data: {
+                LoteID: lote.LoteID,
+                CantidadDisponibleKg: 0,
+              },
+            });
+
+            lote.CantidadDisponibleKg = 0; // 🔹 actualizar en memoria
+          }
+        }
+
+        // Si todavía queda consumo no cubierto del tipo actual
+        if (restante > 0) {
+          // 🔹 Tomar lotes alternativos en el mismo silo y granja con CantidadDisponibleKg > 0
+          const lotesAlternativos = lotes
+            .filter(lote => {
+              const silo = silos.find(s => s.SiloID === lote.SiloID);
+              return (
+                silo &&
+                silo.GranjaID === granjaId &&
+                lote.CantidadDisponibleKg > 0 // solo disponibles
+              );
+            })
+            .sort((a, b) => new Date(a.FechaEntrada).getTime() - new Date(b.FechaEntrada).getTime());
+
+          for (const lote of lotesAlternativos) {
+            if (restante <= 0) break;
+
+            let disponible = lote.CantidadDisponibleKg;
+
+            if (disponible >= restante) {
+              const nuevaCantidad = disponible - restante;
+
+              await fetchFromDynamicApi({
+                metodo: 'LotesAlimento',
+                tipo: 'tabla',
+                operacion: 'actualizar',
+                data: {
+                  LoteID: lote.LoteID,
+                  CantidadDisponibleKg: nuevaCantidad,
+                },
+              });
+
+              lote.CantidadDisponibleKg = nuevaCantidad;
+              restante = 0;
+            } else {
+              restante -= disponible;
+
+              await fetchFromDynamicApi({
+                metodo: 'LotesAlimento',
+                tipo: 'tabla',
+                operacion: 'actualizar',
+                data: {
+                  LoteID: lote.LoteID,
+                  CantidadDisponibleKg: 0,
+                },
+              });
+
+              lote.CantidadDisponibleKg = 0;
+            }
           }
 
-          // 1. Insertar en ALVEZH_alimentos
-          await fetchFromDynamicApi({
-            metodo: 'ALVEZH_alimentos',
-            tipo: 'tabla',
-            operacion: 'insertar',
-            data: {
-              GranjaID: granjaId,
-              CasetaID: caseta,
-              Fecha: fechaFormateada,
-              ExistenciaInicial: parseFloat(String(registro.existencia_inicial || 0)),
-              Entrada: parseFloat(String(registro.entrada || 0)),
-              Consumo: consumo,
-              Tipo: tipo,
-              CreadoPor: 'APP'
-            },
-          });
+          // Solo si no hay más lotes con disponibilidad
+          if (restante > 0) {
+            console.warn(
+              `⚠️ No había suficiente alimento en la granja ${granjaId} para cubrir ${consumo} Kg (faltaron ${restante} Kg)`
+            );
+          }
+        }
 
-          // 2. Actualizar disponibilidad del lote
-          const nuevaCantidad = Math.max(0, lote.CantidadDisponibleKg - consumo);
-          await fetchFromDynamicApi({
-            metodo: 'LotesAlimento',
-            tipo: 'tabla',
-            operacion: 'actualizar',
-            data: {
-              LoteID: lote.LoteID,           // <- aquí
-              CantidadDisponibleKg: lote.CantidadDisponibleKg - consumo
-            },
-          });
           await reloadLotes();
           exitosos++;
 
