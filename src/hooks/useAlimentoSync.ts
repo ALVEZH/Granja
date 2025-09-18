@@ -12,6 +12,32 @@ export const useAlimentoSync = () => {
   const { lotes, reload: reloadLotes } = useLotes();
   const { silos } = useSilos();
 
+  // 🔹 NUEVO: función para obtener tipos de alimento disponibles por granja y FIFO
+  const getTiposDisponibles = (granjaId: number) => {
+    if (!lotes || !silos) return [];
+
+    // Filtrar silos de la granja
+    const silosDeGranja = silos.filter(s => s.GranjaID === granjaId);
+
+    // Por cada silo, tomar el primer lote disponible por FIFO
+    const primerosLotes: any[] = [];
+
+    silosDeGranja.forEach(silo => {
+      const lotesSilo = lotes
+        .filter(l => l.SiloID === silo.SiloID && l.CantidadDisponibleKg > 0)
+        .sort((a, b) => new Date(a.FechaEntrada).getTime() - new Date(b.FechaEntrada).getTime());
+
+      if (lotesSilo.length > 0) {
+        primerosLotes.push(lotesSilo[0]); // solo el primer lote FIFO
+      }
+    });
+
+    // De esos primeros lotes, obtener los tipos de alimento únicos
+    const tiposUnicos = Array.from(new Set(primerosLotes.map(l => l.TipoAlimento)));
+
+    return tiposUnicos;
+  };
+
   const syncAlimentoData = async (granjaId: number, fecha: string, mostrarAlerta = true) => {
     setIsSyncing(true);
     setSyncStatus('🔄 Iniciando sincronización de alimentos...');
@@ -209,5 +235,5 @@ export const useAlimentoSync = () => {
     }
   };
 
-  return { isSyncing, syncStatus, syncAlimentoData };
+  return { isSyncing, syncStatus, syncAlimentoData ,getTiposDisponibles};
 };

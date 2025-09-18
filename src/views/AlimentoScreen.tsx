@@ -11,7 +11,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useCasetas } from '../hooks/useCasetas';
 import { useGranjas } from '../hooks/useGranjas';
 import Modal from 'react-native-modal';
-
+import { useAlimentoSync } from '../hooks/useAlimentoSync';
 
 // Habilita LayoutAnimation en Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -52,6 +52,15 @@ export default function AlimentoScreen() {
   // 1. Agrega estado para mostrar el modal
   const [modalSinGuardar, setModalSinGuardar] = useState(false);
   const [onConfirmSalir, setOnConfirmSalir] = useState<null | (() => void)>(null);
+
+  const [modalTipoVisible, setModalTipoVisible] = useState(false);
+const [casetaSeleccionadaParaTipo, setCasetaSeleccionadaParaTipo] = useState<string | null>(null);
+const { getTiposDisponibles } = useAlimentoSync();
+const tiposDisponibles = casetaSeleccionadaParaTipo 
+  ? getTiposDisponibles(granjaId) 
+  : [];
+
+
 
   // SIEMPRE inicializar los inputs vacíos al entrar
   useEffect(() => {
@@ -340,7 +349,7 @@ export default function AlimentoScreen() {
                         placeholder="0"
                       />
                     </View>
-                    <View style={styles.inputRow}>
+                    {/* <View style={styles.inputRow}>
                       <Text style={styles.inputLabel}>Tipo</Text>
                       <TextInput
                         style={styles.inputCellTipo}
@@ -348,6 +357,19 @@ export default function AlimentoScreen() {
                         onChangeText={v => handleChange(caseta.Nombre, 'tipo', v)}
                         placeholder="Tipo"
                       />
+                    </View> */}
+
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputLabel}>Tipo</Text>
+                      <TouchableOpacity
+                      style={styles.inputCellTipo}
+                      onPress={() => {
+                        setCasetaSeleccionadaParaTipo(caseta.Nombre);
+                        setModalTipoVisible(true);
+                      }}
+                    >
+                      <Text>{datosCaseta.tipo || 'Seleccionar...'}</Text>
+                    </TouchableOpacity>
                     </View>
                   </View>
                 )}
@@ -396,8 +418,48 @@ export default function AlimentoScreen() {
           </View>
         </View>
       </Modal>
+      
+      <Modal isVisible={modalTipoVisible} onBackdropPress={() => setModalTipoVisible(false)}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, maxHeight: 400 }}>
+          <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 12, textAlign: 'center' }}>Seleccionar Tipo</Text>
+          <ScrollView>
+            {casetaSeleccionadaParaTipo && getTiposDisponibles(granjaId).map((tipo) => (
+              <TouchableOpacity
+                key={tipo}
+                style={{ paddingVertical: 10, borderBottomWidth: 1, borderColor: '#eee' }}
+                onPress={() => {
+                  if (casetaSeleccionadaParaTipo) {
+                    setTabla(prev => ({
+                      ...prev,
+                      [casetaSeleccionadaParaTipo]: {
+                        ...prev[casetaSeleccionadaParaTipo],
+                        tipo
+                      }
+                    }));
+                  }
+                  setModalTipoVisible(false);
+                  setCasetaSeleccionadaParaTipo(null);
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>{tipo}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity
+            onPress={() => {
+              setModalTipoVisible(false);
+              setCasetaSeleccionadaParaTipo(null);
+            }}
+            style={{ marginTop: 12, alignSelf: 'center' }}
+          >
+            <Text style={{ color: 'red', fontWeight: 'bold' }}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
+
+  
 }
 
 const styles = StyleSheet.create({
