@@ -7,6 +7,8 @@ import LotesScreen from "../views/LotesScreen";
 import TransferenciasScreen from "../views/TransferenciasScreen";
 import AsignacionesScreen from "../views/AsignacionesScreen";
 import SilosScreen from "../views/SilosScreen";
+import { CustomDrawerContent } from "./CustomDrawer"; // ajusta la ruta correcta
+
 
 const Drawer = createDrawerNavigator();
 
@@ -14,6 +16,7 @@ export default function DrawerNavigator() {
   return (
     <Drawer.Navigator
       initialRouteName="LotesScreen"
+      drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
         headerShown: true,
         drawerType: "slide",

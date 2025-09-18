@@ -25,9 +25,11 @@ import { useSilos } from "../hooks/useSilos";
 import { useTransferencias, Transferencia } from "../hooks/useTransferencias";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
+import TransferenciaCard from "../components/TransferenciaCard";
+
 
 const TransferenciasScreen: React.FC = () => {
-  const { transferencias, reload, saveTransferencia } = useTransferencias();
+  const { transferencias, reload, saveTransferencia , getLoteDefault} = useTransferencias();
   const { granjas } = useGranjas();
   const { silos } = useSilos();
 
@@ -47,7 +49,30 @@ const TransferenciasScreen: React.FC = () => {
   const [placas, setPlacas] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [loteSeleccionado, setLoteSeleccionado] = useState<string | null>(null);
+  const [cantidadDisponible, setCantidadDisponible] = useState<number>(0);
 
+  // estados para filtro de fechas
+const [fechaInicio, setFechaInicio] = useState<Date | null>(null);
+const [fechaFin, setFechaFin] = useState<Date | null>(null);
+const [showPickerInicio, setShowPickerInicio] = useState(false);
+const [showPickerFin, setShowPickerFin] = useState(false);
+
+
+// Normaliza: inicio del día (00:00:00)
+const startOfDay = (d: Date) => {
+  const x = new Date(d);
+  x.setHours(0,0,0,0);
+  return x;
+};
+// Normaliza: fin del día (23:59:59.999)
+const endOfDay = (d: Date) => {
+  const x = new Date(d);
+  x.setHours(23,59,59,999);
+  return x;
+};
+
+  
   const handleBack = () => navigation.replace("Menu" );
 
   const onRefresh = async () => {
@@ -119,33 +144,92 @@ const TransferenciasScreen: React.FC = () => {
     }
   };
 
-  const renderItem = ({ item }: { item: Transferencia }) => {
-    const granjaOrigen = granjas.find(g => g.GranjaID === item.GranjaOrigenID)?.Nombre || `ID ${item.GranjaOrigenID}`;
-    const granjaDestino = granjas.find(g => g.GranjaID === item.GranjaDestinoID)?.Nombre || `ID ${item.GranjaDestinoID}`;
-    const siloOrigen = silos.find(s => s.SiloID === item.SiloOrigenID)?.Nombre || `ID ${item.SiloOrigenID}`;
-    const siloDestino = silos.find(s => s.SiloID === item.SiloDestinoID)?.Nombre || `ID ${item.SiloDestinoID}`;
-    const fechaCorta = item.Fecha?.split("T")[0] || item.Fecha;
+ const renderItem = ({ item }: { item: Transferencia }) => {
+  return (
+    <TransferenciaCard 
+      item={item} 
+      granjas={granjas} 
+      silos={silos} 
+    />
+  );
+};
 
-    return (
-      <View style={styles.item}>
-        <Text style={styles.itemTitle}>Fecha: {fechaCorta}</Text>
-        <Text>Granja Origen: {granjaOrigen}</Text>
-        <Text>Silo Origen: {siloOrigen}</Text>
-        <Text>Granja Destino: {granjaDestino}</Text>
-        <Text>Silo Destino: {siloDestino}</Text>
-        <Text>Tipo Alimento: {item.TipoAlimento}</Text>
-        <Text>Cantidad Kg: {item.CantidadKg}</Text>
-        <Text>Estatus: {item.Estatus}</Text>
-        <Text>Chofer: {item.Chofer || "-"}</Text>
-        <Text>Placas: {item.Placas || "-"}</Text>
-        <Text>Observaciones: {item.Observaciones || "-"}</Text>
-      </View>
-    );
-  };
+// Función para filtrar
+const transferenciasFiltradas = transferencias.filter((t) => {
+  const fecha = new Date(t.Fecha);
+
+  if (fechaInicio && fecha < startOfDay(fechaInicio)) return false;
+  if (fechaFin && fecha > endOfDay(fechaFin)) return false;
+
+  return true;
+});
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
+
+      {/* FILTRO POR RANGO DE FECHAS */}
+<View style={styles.filtroContainer}>
+  <TouchableOpacity style={styles.filtroBtn} onPress={() => setShowPickerInicio(true)}>
+    <Text style={styles.filtroBtnText}>
+      {fechaInicio ? startOfDay(fechaInicio).toISOString().split("T")[0] : "Inicio"}
+    </Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity style={styles.filtroBtn} onPress={() => setShowPickerFin(true)}>
+    <Text style={styles.filtroBtnText}>
+      {fechaFin ? endOfDay(fechaFin).toISOString().split("T")[0] : "Fin"}
+    </Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity style={styles.limpiarBtn} onPress={() => { setFechaInicio(null); setFechaFin(null); }}>
+    <Text style={styles.limpiarBtnText}>Limpiar</Text>
+  </TouchableOpacity>
+</View>
+
+<View style={{ alignItems: "center", marginVertical: 6 }}>
+  {fechaInicio && fechaFin && (
+    <Text style={{ fontStyle: "italic" }}>
+      Filtrando del {fechaInicio.toLocaleDateString()} al {fechaFin.toLocaleDateString()}
+    </Text>
+  )}
+</View>
+
+
+{/* DatePickers condicionales */}
+{showPickerInicio && (
+  
+    <DateTimePicker
+      value={fechaInicio || new Date()}
+      mode="date"
+      display="spinner"
+      onChange={(_, selected) => {
+        setShowPickerInicio(false);
+        if (selected) setFechaInicio(selected);
+      }}
+      style={{ backgroundColor: "#fff" }}
+    />
+)}
+
+{showPickerFin && (
+  <DateTimePicker
+    value={fechaFin || new Date()}
+    mode="date"
+    display="default"
+    onChange={(_, selected) => {
+      setShowPickerFin(false);
+      if (selected) {
+        if (fechaInicio && selected <= fechaInicio) {
+          Alert.alert("Error", "La fecha fin no puede ser menor que la fecha inicio");
+        } else {
+          setFechaFin(selected);
+        }
+      }
+    }}
+  />
+)}
+
       
 
       {/* Lista */}
@@ -154,26 +238,21 @@ const TransferenciasScreen: React.FC = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <FlatList
-          data={transferencias}
-          keyExtractor={(item) => item.TransferenciaID.toString()}
-          renderItem={renderItem}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          /* ListHeaderComponent={
-            <View style={styles.headerContainer}>
-              <Image
-                source={require("../../assets/Iconos/transfer.png")}
-                style={styles.headerImage}
-                resizeMode="contain"
-              />
-            </View>
-          } */
-          ListEmptyComponent={
-            <Text style={{ textAlign: "center", marginTop: 20 }}>
-              No hay transferencias registradas.
-            </Text>
-          }
-          contentContainerStyle={styles.scroll}
-        />
+  data={transferenciasFiltradas}
+  renderItem={renderItem}
+  keyExtractor={(item) => item.TransferenciaID.toString()}
+  refreshControl={
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+  }
+  ListEmptyComponent={
+    <Text style={{ textAlign: "center", marginTop: 20 }}>
+      {fechaInicio || fechaFin
+        ? "No hay transferencias en este rango de fechas."
+        : "No hay transferencias registradas."}
+    </Text>
+  }
+  contentContainerStyle={styles.scroll}
+/>
       </KeyboardAvoidingView>
 
       {/* Modal */}
@@ -209,7 +288,25 @@ const TransferenciasScreen: React.FC = () => {
                   <Picker
                     selectedValue={siloOrigenID}
                     enabled={!!granjaOrigenID}
-                    onValueChange={(value) => setSiloOrigenID(value)}
+                    onValueChange={async (value) => {
+                      setSiloOrigenID(value);
+                      if (value) {
+                        const lote = await getLoteDefault(value);
+                        if (lote) {
+                          setTipoAlimento(lote.tipoAlimento); // tipo de alimento
+                          setLoteSeleccionado(lote.tipoAlimento);
+                          setCantidadDisponible(lote.cantidadDisponible); // nueva variable de estado
+                        } else {
+                          setTipoAlimento("");
+                          setLoteSeleccionado(null);
+                          setCantidadDisponible(0);
+                        }
+                      } else {
+                        setTipoAlimento("");
+                        setLoteSeleccionado(null);
+                        setCantidadDisponible(0);
+                      }
+                    }}
                   >
                     <Picker.Item label="Seleccione un silo" value={null} />
                     {silos
@@ -256,17 +353,17 @@ const TransferenciasScreen: React.FC = () => {
                   </Picker>
                 </View>
 
-                <TextInput
-                style={styles.input}
-                placeholder="Tipo de Alimento"
-                value={tipoAlimento}
-                onChangeText={setTipoAlimento}
+               <TextInput
+                  style={styles.input}
+                  placeholder="Tipo de Alimento"
+                  value={tipoAlimento} // esto se actualizará automáticamente
+                  editable={false}
                 />
 
                 {/* Cantidad Kg */}
                 <TextInput
                   style={styles.input}
-                  placeholder="Cantidad Kg"
+                  placeholder={`Disponible: ${cantidadDisponible} kg`}
                   keyboardType="numeric"
                   value={cantidadKg}
                   onChangeText={setCantidadKg}
@@ -372,4 +469,49 @@ const styles = StyleSheet.create({
   modalButton: { flex: 1, backgroundColor: "#007AFF", padding: 10, marginHorizontal: 5, borderRadius: 8, alignItems: "center" },
   headerContainer: { alignItems: 'center', marginBottom: 10 },
   headerImage: { width: 48, height: 48, marginRight: 10 },
+
+  filtroContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#f5f7fa",
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    elevation: 3, // sombra para Android
+    shadowColor: "#000", // sombra para iOS
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  filtroBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "#007AFF",
+    minWidth: 80,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filtroBtnText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+  limpiarBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "#e0e0e0",
+    minWidth: 80,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  limpiarBtnText: {
+    color: "#333",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
 });
