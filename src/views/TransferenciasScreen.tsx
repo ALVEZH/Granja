@@ -51,6 +51,8 @@ const TransferenciasScreen: React.FC = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loteSeleccionado, setLoteSeleccionado] = useState<string | null>(null);
   const [cantidadDisponible, setCantidadDisponible] = useState<number>(0);
+  const [loading, setLoading] = useState(false);
+
 
   // estados para filtro de fechas
 const [fechaInicio, setFechaInicio] = useState<Date | null>(null);
@@ -118,31 +120,64 @@ const endOfDay = (d: Date) => {
       });
     }, [navigation]);
 
-  const handleSave = async () => {
-    if (!granjaOrigenID || !siloOrigenID || !granjaDestinoID || !siloDestinoID || !cantidadKg || !estatus) {
-      Alert.alert("Error", "Todos los campos obligatorios deben estar completos");
-      return;
-    }
+  const handleSave = () => {
+  if (
+    !granjaOrigenID ||
+    !siloOrigenID ||
+    !granjaDestinoID ||
+    !siloDestinoID ||
+    !cantidadKg ||
+    !estatus
+  ) {
+    Alert.alert("Error", "Todos los campos obligatorios deben estar completos");
+    return;
+  }
 
-    try {
-      await saveTransferencia({
-        Fecha: fecha.toISOString(),
-        GranjaOrigenID: granjaOrigenID,
-        SiloOrigenID: siloOrigenID,
-        GranjaDestinoID: granjaDestinoID,
-        SiloDestinoID: siloDestinoID,
-        TipoAlimento: tipoAlimento,
-        CantidadKg: parseFloat(cantidadKg),
-        Estatus: estatus,
-        Chofer: chofer,
-        Placas: placas,
-        Observaciones: observaciones,
-      });
-      setModalVisible(false);
-    } catch (err: any) {
-      Alert.alert("Error", err.message);
-    }
-  };
+  if (parseFloat(cantidadKg) > cantidadDisponible) {
+    Alert.alert(
+      "Error",
+      "La cantidad a transferir no puede ser mayor a la disponible en el silo de origen."
+    );
+    return;
+  }
+
+  Alert.alert(
+    "Confirmar transferencia",
+    `¿Desea transferir ${cantidadKg} kg de ${tipoAlimento} al silo destino?`,
+    [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Confirmar",
+        onPress: async () => {
+          try {
+            setLoading(true); // 👈 activa el loading
+
+            await saveTransferencia({
+              Fecha: fecha.toISOString(),
+              GranjaOrigenID: granjaOrigenID,
+              SiloOrigenID: siloOrigenID,
+              GranjaDestinoID: granjaDestinoID,
+              SiloDestinoID: siloDestinoID,
+              TipoAlimento: tipoAlimento,
+              CantidadKg: parseFloat(cantidadKg),
+              Estatus: estatus,
+              Chofer: chofer,
+              Placas: placas,
+              Observaciones: observaciones,
+            });
+
+            setModalVisible(false);
+          } catch (err: any) {
+            Alert.alert("Error", err.message || "No se pudo guardar la transferencia.");
+          } finally {
+            setLoading(false); // 👈 desactiva el loading
+          }
+        },
+      },
+    ]
+  );
+};
+
 
  const renderItem = ({ item }: { item: Transferencia }) => {
   return (
@@ -238,21 +273,21 @@ const transferenciasFiltradas = transferencias.filter((t) => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <FlatList
-  data={transferenciasFiltradas}
-  renderItem={renderItem}
-  keyExtractor={(item) => item.TransferenciaID.toString()}
-  refreshControl={
-    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-  }
-  ListEmptyComponent={
-    <Text style={{ textAlign: "center", marginTop: 20 }}>
-      {fechaInicio || fechaFin
-        ? "No hay transferencias en este rango de fechas."
-        : "No hay transferencias registradas."}
-    </Text>
-  }
-  contentContainerStyle={styles.scroll}
-/>
+          data={transferenciasFiltradas}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.TransferenciaID.toString()}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <Text style={{ textAlign: "center", marginTop: 20 }}>
+              {fechaInicio || fechaFin
+                ? "No hay transferencias en este rango de fechas."
+                : "No hay transferencias registradas."}
+            </Text>
+          }
+          contentContainerStyle={styles.scroll}
+        />
       </KeyboardAvoidingView>
 
       {/* Modal */}
@@ -310,7 +345,7 @@ const transferenciasFiltradas = transferencias.filter((t) => {
                   >
                     <Picker.Item label="Seleccione un silo" value={null} />
                     {silos
-                      .filter((s) => s.GranjaID === granjaOrigenID)
+                      .filter((s) => s.GranjaID === granjaOrigenID && s.Activo)
                       .map((s) => (
                         <Picker.Item key={s.SiloID} label={s.Nombre} value={s.SiloID} />
                       ))
@@ -345,7 +380,7 @@ const transferenciasFiltradas = transferencias.filter((t) => {
                   >
                     <Picker.Item label="Seleccione un silo" value={null} />
                     {silos
-                      .filter((s) => s.GranjaID === granjaDestinoID)
+                      .filter((s) => s.GranjaID === granjaDestinoID && s.Activo)
                       .map((s) => (
                         <Picker.Item key={s.SiloID} label={s.Nombre} value={s.SiloID} />
                       ))
@@ -377,20 +412,34 @@ const transferenciasFiltradas = transferencias.filter((t) => {
                   onChangeText={setEstatus}
                 />
 
-                {/* Chofer */}
+                {/* Chofer: solo letras y espacios */}
                 <TextInput
                   style={styles.input}
                   placeholder="Chofer (opcional)"
                   value={chofer}
-                  onChangeText={setChofer}
+                  onChangeText={(text) => {
+                    const regex = /^[a-zA-Z\s]*$/; // solo letras y espacios
+                    if (regex.test(text)) {
+                      setChofer(text);
+                    } else {
+                      Alert.alert("Entrada inválida", "El nombre del chofer solo puede contener letras y espacios.");
+                    }
+                  }}
                 />
 
-                {/* Placas */}
+                {/* Placas: solo letras y números */}
                 <TextInput
                   style={styles.input}
                   placeholder="Placas (opcional)"
                   value={placas}
-                  onChangeText={setPlacas}
+                  onChangeText={(text) => {
+                    const regex = /^[a-zA-Z0-9]*$/; // solo letras y números
+                    if (regex.test(text)) {
+                      setPlacas(text);
+                    } else {
+                      Alert.alert("Entrada inválida", "Las placas solo pueden contener letras y números.");
+                    }
+                  }}
                 />
 
                 {/* Observaciones */}
@@ -420,17 +469,38 @@ const transferenciasFiltradas = transferencias.filter((t) => {
 
                 {/* Botones */}
                 <View style={styles.modalButtons}>
-                  <TouchableOpacity style={styles.modalButton} onPress={handleSave}>
-                    <Text style={{ color: "#fff", fontWeight: "bold" }}>Guardar</Text>
-                  </TouchableOpacity>
+                  {/* Guardar */}
+                  <TouchableOpacity
+  style={[
+    styles.modalButton,
+    loading && { backgroundColor: "#999" }, // gris mientras carga
+  ]}
+  onPress={handleSave}
+  disabled={loading} // 👈 deshabilita mientras guarda
+>
+  <Text style={{ color: "#fff", fontWeight: "bold" }}>
+    {loading ? "Guardando..." : "Guardar"}
+  </Text>
+</TouchableOpacity>
+
+
+                  {/* Cancelar con confirmación */}
                   <TouchableOpacity
                     style={[styles.modalButton, { backgroundColor: "#aaa" }]}
-                    onPress={() => setModalVisible(false)}
+                    onPress={() => {
+                      Alert.alert(
+                        "Confirmar cancelación",
+                        "¿Estás seguro de que deseas cancelar? Se perderán los cambios.",
+                        [
+                          { text: "No", style: "cancel" },
+                          { text: "Sí, cancelar", style: "destructive", onPress: () => setModalVisible(false) }
+                        ]
+                      );
+                    }}
                   >
                     <Text style={{ color: "#fff", fontWeight: "bold" }}>Cancelar</Text>
                   </TouchableOpacity>
                 </View>
-
               </ScrollView>
             </View>
           </View>

@@ -6,6 +6,8 @@ import {
   Text,
   FlatList,
   StyleSheet,
+  Modal,
+  TouchableOpacity,
   ScrollView,
   Image,
 } from "react-native";
@@ -28,6 +30,9 @@ const LotesScreen: React.FC = () => {
   const [granjaFilter, setGranjaFilter] = useState<number | null>(null);
   const [siloFilter, setSiloFilter] = useState<number | null>(null);
 
+  // 🔹 Nuevo estado para modal de filtros
+  const [modalFiltrosVisible, setModalFiltrosVisible] = useState(false);
+
   // 🔹 Agrupar silos con sus lotes ordenados FIFO, filtrando por granja y tipo de alimento
   const silosConLotes = silos
     .filter((s) => !granjaFilter || s.GranjaID === granjaFilter)
@@ -35,7 +40,7 @@ const LotesScreen: React.FC = () => {
     .map((s) => {
       const lotesDelSilo = lotes
         .filter((l) => l.SiloID === s.SiloID && l.CantidadDisponibleKg > 0)
-        .map((l) => ({ ...l, GranjaID: s.GranjaID })); // agregamos granja al lote
+        .map((l) => ({ ...l, GranjaID: s.GranjaID }));
       return { ...s, lotes: ordenarLotesFIFO(lotesDelSilo) };
     });
 
@@ -58,8 +63,6 @@ const LotesScreen: React.FC = () => {
 
   const renderItem = ({ item }: { item: any }) => {
     const granja = granjas.find((g) => g.GranjaID === item.GranjaID);
-
-    // 🔹 Aquí mostramos todos los lotes del silo en orden FIFO
     return (
       <View style={styles.loteCard}>
         <Text style={styles.loteTitle}>{item.Nombre}</Text>
@@ -70,7 +73,6 @@ const LotesScreen: React.FC = () => {
             100,
             Math.round((l.CantidadDisponibleKg / l.CantidadInicialKg) * 100)
           );
-
           return (
             <View key={l.LoteID} style={{ marginTop: 12 }}>
               <Text style={{ fontWeight: "bold" }}>Lote {index + 1} (FIFO)</Text>
@@ -106,51 +108,72 @@ const LotesScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* 🔹 Filtros */}
-      <ScrollView
-        horizontal
-        style={styles.filtros}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          justifyContent: "center",
-          alignItems: "center",
-          paddingHorizontal: 16,
-        }}
+      {/* 🔹 Botón compacto de filtros */}
+      <TouchableOpacity
+        style={styles.filtroBoton}
+        onPress={() => setModalFiltrosVisible(true)}
+        activeOpacity={0.8}
       >
-        <View style={styles.pickerContainer}>
-          <Text style={styles.filterLabel}>Granja:</Text>
-          <Picker
-            selectedValue={granjaFilter}
-            onValueChange={setGranjaFilter}
-            style={styles.picker}
-          >
-            <Picker.Item label="Todas" value={null} />
-            {granjas.map((g) => (
-              <Picker.Item
-                key={g.GranjaID}
-                label={g.Nombre}
-                value={g.GranjaID}
-              />
-            ))}
-          </Picker>
-        </View>
+        <Text style={styles.filtroBotonTexto}>
+          {granjas.find((g) => g.GranjaID === granjaFilter)?.Nombre || "Todas las granjas"} |{" "}
+          {silos.find((s) => s.SiloID === siloFilter)?.Nombre || "Todos los silos"}
+        </Text>
+      </TouchableOpacity>
 
-        <View style={styles.pickerContainer}>
-          <Text style={styles.filterLabel}>Silo:</Text>
-          <Picker
-            selectedValue={siloFilter}
-            onValueChange={setSiloFilter}
-            style={styles.picker}
-          >
-            <Picker.Item label="Todos" value={null} />
-            {silos
-              .filter((s) => !granjaFilter || s.GranjaID === granjaFilter)
-              .map((s) => (
-                <Picker.Item key={s.SiloID} label={s.Nombre} value={s.SiloID} />
-              ))}
-          </Picker>
+
+      {/* 🔹 Modal de filtros */}
+      <Modal visible={modalFiltrosVisible} animationType="slide" transparent>
+        <View style={styles.modalFiltrosBackground}>
+          <View style={styles.modalFiltrosContainer}>
+            <Text style={styles.modalTitle}>Filtros</Text>
+
+            {/* Filtro Granja */}
+            <Text style={styles.label}>Granja:</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={granjaFilter}
+                onValueChange={setGranjaFilter}
+              >
+                <Picker.Item label="Todas" value={null} />
+                {granjas.map((g) => (
+                  <Picker.Item key={g.GranjaID} label={g.Nombre} value={g.GranjaID} />
+                ))}
+              </Picker>
+            </View>
+
+            {/* Filtro Silo */}
+            <Text style={styles.label}>Silo:</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={siloFilter}
+                onValueChange={setSiloFilter}
+              >
+                <Picker.Item label="Todos" value={null} />
+                {silos
+                  .filter((s) => !granjaFilter || s.GranjaID === granjaFilter)
+                  .map((s) => (
+                    <Picker.Item key={s.SiloID} label={s.Nombre} value={s.SiloID} />
+                  ))}
+              </Picker>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={() => setModalFiltrosVisible(false)}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>Aplicar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: "#aaa" }]}
+                onPress={() => setModalFiltrosVisible(false)}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </ScrollView>
+      </Modal>
 
       {/* 🔹 Lista de silos con lotes FIFO */}
       <FlatList
@@ -172,18 +195,65 @@ export default LotesScreen;
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#eaf1f9" },
-  filtros: { paddingVertical: 10, paddingHorizontal: 16, backgroundColor: "#fff" },
-  pickerContainer: {
-    marginHorizontal: 8,
+
+  // 🔹 Botón compacto de filtros
+  filtroBoton: {
+  backgroundColor: "#007AFF",
+  paddingVertical: 12,
+  paddingHorizontal: 24,
+  borderRadius: 24,
+  alignSelf: "center",       // 🔹 centra el botón
+  marginVertical: 16,
+  elevation: 5,              // 🔹 sombra Android
+  shadowColor: "#000",       // 🔹 sombra iOS
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+},
+filtroBotonTexto: {
+  color: "#fff",
+  fontWeight: "bold",
+  fontSize: 16,
+  textAlign: "center",
+},
+
+
+  modalFiltrosBackground: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f0f4f8",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    elevation: 2,
   },
-  filterLabel: { fontWeight: "bold", marginBottom: 4 },
-  picker: { width: 150, height: 40 },
+  modalFiltrosContainer: {
+    width: "85%",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 12, textAlign: "center" },
+
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  label: { fontWeight: "bold", marginTop: 8, marginBottom: 4 },
+
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    backgroundColor: "#007AFF",
+    padding: 10,
+    marginHorizontal: 5,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+
   loteCard: {
     backgroundColor: "#fff",
     borderRadius: 12,

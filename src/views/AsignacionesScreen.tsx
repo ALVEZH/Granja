@@ -53,6 +53,7 @@ const AsignacionesScreen: React.FC = () => {
   const [siloID, setSiloID] = useState<number | null>(null);
   const [notas, setNotas] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleBack = () => navigation.replace("Menu" );
 
@@ -97,24 +98,43 @@ const AsignacionesScreen: React.FC = () => {
   }, [navigation]);
 
   const handleSave = async () => {
-    if (!fecha || !granjaID || !casetaID || !tipoAlimento) {
-      Alert.alert("Error", "Granja, Caseta, Fecha y Tipo de Alimento son obligatorios");
-      return;
-    }
-    try {
-      await saveAsignacion({
-        GranjaID: granjaID,
-        CasetaID: casetaID,
-        TipoAlimento: tipoAlimento,
-        SiloPreferenteID: siloID,
-        FechaAsignacion: fecha.toISOString().split("T")[0],
-        Notas: notas,
-      });
-      setModalVisible(false);
-    } catch (err: any) {
-      Alert.alert("Error", err.message);
-    }
-  };
+  if (!fecha || !granjaID || !casetaID || !tipoAlimento) {
+    Alert.alert("Error", "Granja, Caseta, Fecha y Tipo de Alimento son obligatorios");
+    return;
+  }
+
+  Alert.alert(
+    "Confirmación",
+    "¿Deseas guardar esta asignación?",
+    [
+      {
+        text: "Cancelar",
+        style: "cancel",
+      },
+      {
+        text: "Guardar",
+        onPress: async () => {
+          try {
+            setLoading(true); // 🔹 activa el loading
+            await saveAsignacion({
+              GranjaID: granjaID,
+              CasetaID: casetaID,
+              TipoAlimento: tipoAlimento,
+              SiloPreferenteID: siloID,
+              FechaAsignacion: fecha.toISOString().split("T")[0],
+              Notas: notas,
+            });
+            setModalVisible(false);
+          } catch (err: any) {
+            Alert.alert("Error", err.message);
+          } finally {
+            setLoading(false); // 🔹 desactiva el loading
+          }
+        },
+      },
+    ]
+  );
+};
 
   // datos a mostrar: si hay filtro, solo asignaciones de esa granja
   const displayedAsignaciones: Asignacion[] = filterGranjaID
@@ -237,7 +257,7 @@ const AsignacionesScreen: React.FC = () => {
                 </View>
 
                 {/* Silo Preferente */}
-                <Text style={styles.label}>Silo Preferente (opcional)</Text>
+                {/* <Text style={styles.label}>Silo Preferente (opcional)</Text>
                 <View style={styles.pickerContainer}>
                   <Picker selectedValue={siloID} onValueChange={(value) => setSiloID(value)}>
                     <Picker.Item label="Sin selección" value={null} />
@@ -245,14 +265,45 @@ const AsignacionesScreen: React.FC = () => {
                       <Picker.Item key={s.SiloID} label={s.Nombre} value={s.SiloID} />
                     ))}
                   </Picker>
+                </View> */}
+                {/* Silo Preferente */}
+                <Text style={styles.label}>Silo Preferente (opcional)</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker selectedValue={siloID} onValueChange={(value) => setSiloID(value)}>
+                    <Picker.Item label="Sin selección" value={null} />
+                    {silos
+                      .filter((s) => s.GranjaID === granjaID && s.Activo) // 🔹 solo activos y de la granja seleccionada
+                      .map((s) => (
+                        <Picker.Item key={s.SiloID} label={s.Nombre} value={s.SiloID} />
+                      ))
+                    }
+                  </Picker>
                 </View>
+
+                {/* <TextInput
+                  style={styles.input}
+                  placeholder="Tipo de Alimento"
+                  value={tipoAlimento}
+                  onChangeText={setTipoAlimento}
+                /> */}
 
                 {/* Tipo de Alimento */}
                 <TextInput
                   style={styles.input}
                   placeholder="Tipo de Alimento"
                   value={tipoAlimento}
-                  onChangeText={setTipoAlimento}
+                  onChangeText={(text) => {
+                    // Verifica si contiene algo inválido
+                    if (/[^a-zA-Z\s]/.test(text)) {
+                      Alert.alert(
+                        "Entrada no válida",
+                        "Solo se permiten letras y espacios.",
+                        [{ text: "OK" }]
+                      );
+                      return; // no actualiza el valor
+                    }
+                    setTipoAlimento(text);
+                  }}
                 />
 
                 {/* Fecha */}
@@ -282,15 +333,31 @@ const AsignacionesScreen: React.FC = () => {
 
                 {/* Botones */}
                 <View style={styles.modalButtons}>
-                  <TouchableOpacity style={styles.modalButton} onPress={handleSave}>
-                    <Text style={{ color: "#fff", fontWeight: "bold" }}>Guardar</Text>
+                  <TouchableOpacity
+                    style={[styles.modalButton, loading && { opacity: 0.6 }]}
+                    onPress={handleSave}
+                    disabled={loading} // deshabilita mientras carga
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                      {loading ? "Guardando..." : "Guardar"}
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.modalButton, { backgroundColor: "#aaa" }]}
-                    onPress={() => setModalVisible(false)}
+                    onPress={() =>
+                      Alert.alert(
+                        "Confirmar cancelación",
+                        "¿Estás seguro que deseas cancelar? Los cambios no guardados se perderán.",
+                        [
+                          { text: "No", style: "cancel" },
+                          { text: "Sí, cancelar", style: "destructive", onPress: () => setModalVisible(false) }
+                        ]
+                      )
+                    }
                   >
                     <Text style={{ color: "#fff", fontWeight: "bold" }}>Cancelar</Text>
                   </TouchableOpacity>
+
                 </View>
               </ScrollView>
             </View>

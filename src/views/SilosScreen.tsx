@@ -36,6 +36,7 @@ const SilosScreen: React.FC = () => {
   const [capacidad, setCapacidad] = useState("");
   const [activo, setActivo] = useState(true);
   const [granjaID, setGranjaID] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -88,23 +89,39 @@ const SilosScreen: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!nombre || !capacidad || !granjaID) {
-      Alert.alert("Error", "Completa todos los campos");
-      return;
-    }
-    try {
-      await saveSilo({
-        ...editingSilo,
-        Nombre: nombre,
-        CapacidadKg: parseFloat(capacidad),
-        Activo: activo,
-        GranjaID: granjaID,
-      });
-      setModalVisible(false);
-    } catch (err: any) {
-      Alert.alert("Error", err.message);
-    }
-  };
+  if (!nombre || !capacidad || !granjaID) {
+    Alert.alert("Error", "Completa todos los campos");
+    return;
+  }
+
+  Alert.alert(
+    "Confirmación",
+    "¿Deseas guardar este silo?",
+    [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Guardar",
+        onPress: async () => {
+          try {
+            setLoading(true); // 🔹 activa loading
+            await saveSilo({
+              ...editingSilo,
+              Nombre: nombre,
+              CapacidadKg: parseFloat(capacidad),
+              Activo: activo,
+              GranjaID: granjaID,
+            });
+            setModalVisible(false);
+          } catch (err: any) {
+            Alert.alert("Error", err.message);
+          } finally {
+            setLoading(false); // 🔹 desactiva loading
+          }
+        },
+      },
+    ]
+  );
+};
 
   const handleDelete = (silo: Silo) => {
     Alert.alert(
@@ -188,12 +205,26 @@ const SilosScreen: React.FC = () => {
               {editingSilo ? "Editar Silo" : "Agregar Silo"}
             </Text>
 
-            <TextInput
+            {/* <TextInput
               style={styles.input}
               placeholder="Nombre"
               value={nombre}
               onChangeText={setNombre}
+            /> */}
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre"
+              value={nombre}
+              onChangeText={(text) => {
+                const regex = /^[a-zA-Z\s]*$/; // Solo letras y espacios
+                if (regex.test(text)) {
+                  setNombre(text);
+                } else {
+                  Alert.alert("Entrada inválida", "El nombre solo puede contener letras y espacios.");
+                }
+              }}
             />
+
             <TextInput
               style={styles.input}
               placeholder="Capacidad (kg)"
@@ -225,14 +256,29 @@ const SilosScreen: React.FC = () => {
             </View>
 
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <TouchableOpacity onPress={handleSave} style={styles.modalButton}>
-                <Text style={styles.modalButtonText}>Guardar</Text>
+              <TouchableOpacity
+                onPress={handleSave}
+                style={[styles.modalButton, loading && { opacity: 0.6 }]}
+                disabled={loading} // deshabilita mientras carga
+              >
+                <Text style={styles.modalButtonText}>
+                  {loading ? "Guardando..." : "Guardar"}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                style={[styles.modalButton, { backgroundColor: "#ccc" }]}
-              >
-                <Text style={styles.modalButtonText}>Cancelar</Text>
+                style={[styles.modalButton, { backgroundColor: "#aaa" }]}
+                  onPress={() => {
+                  Alert.alert(
+                    "Confirmar cancelación",
+                    "¿Estás seguro de que deseas cancelar? Se perderán los cambios.",
+                     [
+                      { text: "No", style: "cancel" },
+                      { text: "Sí, cancelar", style: "destructive", onPress: () => setModalVisible(false) }
+                    ]
+                  );
+                  }}
+                  >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>Cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
