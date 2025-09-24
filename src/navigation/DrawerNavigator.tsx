@@ -7,8 +7,8 @@ import LotesScreen from "../views/LotesScreen";
 import TransferenciasScreen from "../views/TransferenciasScreen";
 import AsignacionesScreen from "../views/AsignacionesScreen";
 import SilosScreen from "../views/SilosScreen";
+import EnviosFabricaScreen from "../views/EnviosFabricaScreen";
 import { CustomDrawerContent } from "./CustomDrawer"; // ajusta la ruta correcta
-
 
 const Drawer = createDrawerNavigator();
 
@@ -57,6 +57,20 @@ export default function DrawerNavigator() {
         }}
       />
       <Drawer.Screen
+        name="EnviosFabricaScreen"
+        component={EnviosFabricaScreen}
+        options={{
+          drawerLabel: "Envios Fabrica",
+          drawerIcon: () => (
+            <Image
+              source={require("../../assets/Iconos/fabrica.png")}
+              style={{ width: 24, height: 24 }}
+              resizeMode="contain"
+            />
+          ),
+        }}
+      />
+      {/* <Drawer.Screen
         name="AsignacionesScreen"
         component={AsignacionesScreen}
         options={{
@@ -69,7 +83,7 @@ export default function DrawerNavigator() {
             />
           ),
         }}
-      />
+      /> */}
       <Drawer.Screen
         name="SilosScreen"
         component={SilosScreen}

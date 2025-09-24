@@ -55,24 +55,24 @@ const TransferenciasScreen: React.FC = () => {
 
 
   // estados para filtro de fechas
-const [fechaInicio, setFechaInicio] = useState<Date | null>(null);
-const [fechaFin, setFechaFin] = useState<Date | null>(null);
-const [showPickerInicio, setShowPickerInicio] = useState(false);
-const [showPickerFin, setShowPickerFin] = useState(false);
+  const [fechaInicio, setFechaInicio] = useState<Date | null>(null);
+  const [fechaFin, setFechaFin] = useState<Date | null>(null);
+  const [showPickerInicio, setShowPickerInicio] = useState(false);
+  const [showPickerFin, setShowPickerFin] = useState(false);
 
 
-// Normaliza: inicio del día (00:00:00)
-const startOfDay = (d: Date) => {
-  const x = new Date(d);
-  x.setHours(0,0,0,0);
-  return x;
-};
-// Normaliza: fin del día (23:59:59.999)
-const endOfDay = (d: Date) => {
-  const x = new Date(d);
-  x.setHours(23,59,59,999);
-  return x;
-};
+  // Normaliza: inicio del día (00:00:00)
+  const startOfDay = (d: Date) => {
+    const x = new Date(d);
+    x.setHours(0,0,0,0);
+    return x;
+  };
+  // Normaliza: fin del día (23:59:59.999)
+  const endOfDay = (d: Date) => {
+    const x = new Date(d);
+    x.setHours(23,59,59,999);
+    return x;
+  };
 
   
   const handleBack = () => navigation.replace("Menu" );
@@ -126,8 +126,7 @@ const endOfDay = (d: Date) => {
     !siloOrigenID ||
     !granjaDestinoID ||
     !siloDestinoID ||
-    !cantidadKg ||
-    !estatus
+    !cantidadKg 
   ) {
     Alert.alert("Error", "Todos los campos obligatorios deben estar completos");
     return;
@@ -160,7 +159,7 @@ const endOfDay = (d: Date) => {
               SiloDestinoID: siloDestinoID,
               TipoAlimento: tipoAlimento,
               CantidadKg: parseFloat(cantidadKg),
-              Estatus: estatus,
+              /* Estatus: estatus, */
               Chofer: chofer,
               Placas: placas,
               Observaciones: observaciones,
@@ -205,67 +204,65 @@ const transferenciasFiltradas = transferencias.filter((t) => {
       {/* Header */}
 
       {/* FILTRO POR RANGO DE FECHAS */}
-<View style={styles.filtroContainer}>
-  <TouchableOpacity style={styles.filtroBtn} onPress={() => setShowPickerInicio(true)}>
-    <Text style={styles.filtroBtnText}>
-      {fechaInicio ? startOfDay(fechaInicio).toISOString().split("T")[0] : "Inicio"}
-    </Text>
-  </TouchableOpacity>
+      <View style={styles.filtroContainer}>
+        <TouchableOpacity style={styles.filtroBtn} onPress={() => setShowPickerInicio(true)}>
+          <Text style={styles.filtroBtnText}>
+            {fechaInicio ? startOfDay(fechaInicio).toISOString().split("T")[0] : "Inicio"}
+          </Text>
+        </TouchableOpacity>
 
-  <TouchableOpacity style={styles.filtroBtn} onPress={() => setShowPickerFin(true)}>
-    <Text style={styles.filtroBtnText}>
-      {fechaFin ? endOfDay(fechaFin).toISOString().split("T")[0] : "Fin"}
-    </Text>
-  </TouchableOpacity>
+        <TouchableOpacity style={styles.filtroBtn} onPress={() => setShowPickerFin(true)}>
+          <Text style={styles.filtroBtnText}>
+            {fechaFin ? endOfDay(fechaFin).toISOString().split("T")[0] : "Fin"}
+          </Text>
+        </TouchableOpacity>
 
-  <TouchableOpacity style={styles.limpiarBtn} onPress={() => { setFechaInicio(null); setFechaFin(null); }}>
-    <Text style={styles.limpiarBtnText}>Limpiar</Text>
-  </TouchableOpacity>
-</View>
+        <TouchableOpacity style={styles.limpiarBtn} onPress={() => { setFechaInicio(null); setFechaFin(null); }}>
+          <Text style={styles.limpiarBtnText}>Limpiar</Text>
+        </TouchableOpacity>
+      </View>
 
-<View style={{ alignItems: "center", marginVertical: 6 }}>
-  {fechaInicio && fechaFin && (
-    <Text style={{ fontStyle: "italic" }}>
-      Filtrando del {fechaInicio.toLocaleDateString()} al {fechaFin.toLocaleDateString()}
-    </Text>
-  )}
-</View>
+      <View style={{ alignItems: "center", marginVertical: 6 }}>
+        {fechaInicio && fechaFin && (
+          <Text style={{ fontStyle: "italic" }}>
+            Filtrando del {fechaInicio.toLocaleDateString()} al {fechaFin.toLocaleDateString()}
+          </Text>
+        )}
+      </View>
 
 
-{/* DatePickers condicionales */}
-{showPickerInicio && (
-  
-    <DateTimePicker
-      value={fechaInicio || new Date()}
-      mode="date"
-      display="spinner"
-      onChange={(_, selected) => {
-        setShowPickerInicio(false);
-        if (selected) setFechaInicio(selected);
-      }}
-      style={{ backgroundColor: "#fff" }}
-    />
-)}
+      {/* DatePickers condicionales */}
+      {showPickerInicio && (
+        
+          <DateTimePicker
+            value={fechaInicio || new Date()}
+            mode="date"
+            display="spinner"
+            onChange={(_, selected) => {
+              setShowPickerInicio(false);
+              if (selected) setFechaInicio(selected);
+            }}
+            style={{ backgroundColor: "#fff" }}
+          />
+      )}
 
-{showPickerFin && (
-  <DateTimePicker
-    value={fechaFin || new Date()}
-    mode="date"
-    display="default"
-    onChange={(_, selected) => {
-      setShowPickerFin(false);
-      if (selected) {
-        if (fechaInicio && selected <= fechaInicio) {
-          Alert.alert("Error", "La fecha fin no puede ser menor que la fecha inicio");
-        } else {
-          setFechaFin(selected);
-        }
-      }
-    }}
-  />
-)}
-
-      
+      {showPickerFin && (
+        <DateTimePicker
+          value={fechaFin || new Date()}
+          mode="date"
+          display="default"
+          onChange={(_, selected) => {
+            setShowPickerFin(false);
+            if (selected) {
+              if (fechaInicio && selected <= fechaInicio) {
+                Alert.alert("Error", "La fecha fin no puede ser menor que la fecha inicio");
+              } else {
+                setFechaFin(selected);
+              }
+            }
+          }}
+        />
+      )}
 
       {/* Lista */}
       <KeyboardAvoidingView
@@ -405,12 +402,12 @@ const transferenciasFiltradas = transferencias.filter((t) => {
                 />
 
                 {/* Estatus */}
-                <TextInput
+                {/* <TextInput
                   style={styles.input}
                   placeholder="Estatus"
                   value={estatus}
                   onChangeText={setEstatus}
-                />
+                /> */}
 
                 {/* Chofer: solo letras y espacios */}
                 <TextInput
@@ -471,17 +468,17 @@ const transferenciasFiltradas = transferencias.filter((t) => {
                 <View style={styles.modalButtons}>
                   {/* Guardar */}
                   <TouchableOpacity
-  style={[
-    styles.modalButton,
-    loading && { backgroundColor: "#999" }, // gris mientras carga
-  ]}
-  onPress={handleSave}
-  disabled={loading} // 👈 deshabilita mientras guarda
->
-  <Text style={{ color: "#fff", fontWeight: "bold" }}>
-    {loading ? "Guardando..." : "Guardar"}
-  </Text>
-</TouchableOpacity>
+                    style={[
+                      styles.modalButton,
+                      loading && { backgroundColor: "#999" }, // gris mientras carga
+                    ]}
+                    onPress={handleSave}
+                    disabled={loading} // 👈 deshabilita mientras guarda
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                      {loading ? "Guardando..." : "Guardar"}
+                    </Text>
+                  </TouchableOpacity>
 
 
                   {/* Cancelar con confirmación */}

@@ -4,6 +4,7 @@ export type DrawerParamList = {
   TransferenciasScreen: undefined;
   AsignacionesScreen: undefined;
   SilosScreen: undefined;
+  EnviosFabricaScreen: undefined;
 };
 
 // Parámetros del Stack principal (todas las demás pantallas + Drawer)

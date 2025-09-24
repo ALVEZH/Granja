@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -21,17 +22,22 @@ import { Picker } from "@react-native-picker/picker";
 import { ordenarLotesFIFO } from "../util/fifo";
 
 const LotesScreen: React.FC = () => {
+  const {reload } = useLotes();
   const { granjas } = useGranjas();
   const { silos } = useSilos();
   const { lotes } = useLotes();
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-
+  const [loading, setLoading] = useState(false);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [granjaFilter, setGranjaFilter] = useState<number | null>(null);
   const [siloFilter, setSiloFilter] = useState<number | null>(null);
 
   // 🔹 Nuevo estado para modal de filtros
   const [modalFiltrosVisible, setModalFiltrosVisible] = useState(false);
+
+  // Refrescar lista
+  const onRefresh = async () => {
+    await reload();
+  };
 
   // 🔹 Agrupar silos con sus lotes ordenados FIFO, filtrando por granja y tipo de alimento
   const silosConLotes = silos
@@ -181,6 +187,7 @@ const LotesScreen: React.FC = () => {
         keyExtractor={(item) => item.SiloID.toString()}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <Text style={{ textAlign: "center", marginTop: 20 }}>
             No hay lotes disponibles

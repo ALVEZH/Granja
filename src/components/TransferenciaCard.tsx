@@ -20,7 +20,7 @@ interface Transferencia {
   SiloDestinoID: number;
   TipoAlimento: string;
   CantidadKg: number;
-  Estatus: string;
+  /* Estatus: string; */
   Chofer?: string;
   Placas?: string;
   Observaciones?: string;
@@ -82,7 +82,7 @@ const TransferenciaCard: React.FC<Props> = ({ item, granjas, silos }) => {
             <Text>Silo Destino: {siloDestino}</Text>
             <Text>Tipo Alimento: {item.TipoAlimento}</Text>
             <Text>Cantidad Kg: {item.CantidadKg}</Text>
-            <Text>Estatus: {item.Estatus}</Text>
+            {/* <Text>Estatus: {item.Estatus}</Text> */}
             <Text>Chofer: {item.Chofer || "-"}</Text>
             <Text>Placas: {item.Placas || "-"}</Text>
             <Text>Observaciones: {item.Observaciones || "-"}</Text>

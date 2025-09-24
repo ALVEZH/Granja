@@ -11,7 +11,7 @@ export interface Transferencia {
   SiloDestinoID: number;
   TipoAlimento: string;   
   CantidadKg: number;
-  Estatus: string;
+  /* Estatus: string; */
   Chofer?: string;
   Placas?: string;
   Observaciones?: string;
@@ -80,7 +80,7 @@ export function useTransferencias() {
         SiloDestinoID: transferencia.SiloDestinoID,
         TipoAlimento: transferencia.TipoAlimento,
         CantidadKg: transferencia.CantidadKg?.toString(),
-        Estatus: transferencia.Estatus,
+        /* Estatus: transferencia.Estatus, */
         Chofer: transferencia.Chofer || null,
         Placas: transferencia.Placas || null,
         Observaciones: transferencia.Observaciones || null,
